@@ -1,12 +1,39 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { execFile } = require('child_process');
 const db = require('./db');
 const { CATEGORIES } = require('./categorize');
 
 const PORT = 4173;
 const PUBLIC_DIR = path.join(__dirname, 'public');
+
+// Session auth — only meaningful when this server is reachable publicly
+// (behind Caddy/HTTPS on the cloud deployment). Sessions live in memory
+// only; a restart just means logging in again, acceptable for a single
+// personal user. COOKIE_SECURE should be set once actually served over
+// HTTPS — plain http://localhost testing needs it unset, since browsers
+// never send a Secure cookie back over plain HTTP.
+const sessions = new Set();
+const COOKIE_SECURE = process.env.COOKIE_SECURE === 'true';
+
+function parseCookies(req) {
+  const header = req.headers.cookie || '';
+  const cookies = {};
+  header.split(';').forEach((pair) => {
+    const idx = pair.indexOf('=');
+    if (idx === -1) return;
+    cookies[pair.slice(0, idx).trim()] = pair.slice(idx + 1).trim();
+  });
+  return cookies;
+}
+
+function isAuthed(req) {
+  if (!process.env.APP_PASSWORD) return true; // no password configured -> auth disabled (local dev default)
+  const token = parseCookies(req).session;
+  return !!token && sessions.has(token);
+}
 
 const MIME_TYPES = {
   '.html': 'text/html',
@@ -62,6 +89,33 @@ function serveStatic(req, res, urlPath) {
 
 async function handleApi(req, res, urlPath) {
   try {
+    if (req.method === 'POST' && urlPath === '/api/login') {
+      const { password } = await readBody(req);
+      const expected = process.env.APP_PASSWORD || '';
+      const given = password || '';
+      // Constant-time compare, but only when lengths already match —
+      // timingSafeEqual throws on mismatched buffer lengths, so a
+      // length check first (itself not timing-sensitive information,
+      // since password length isn't the secret here) avoids that.
+      const match =
+        expected.length > 0 &&
+        given.length === expected.length &&
+        crypto.timingSafeEqual(Buffer.from(given), Buffer.from(expected));
+      if (!match) return sendJson(res, 401, { error: 'Incorrect password' });
+
+      const token = crypto.randomBytes(32).toString('hex');
+      sessions.add(token);
+      res.setHeader(
+        'Set-Cookie',
+        `session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000${COOKIE_SECURE ? '; Secure' : ''}`
+      );
+      return sendJson(res, 200, { ok: true });
+    }
+
+    if (!isAuthed(req)) {
+      return sendJson(res, 401, { error: 'Not authenticated' });
+    }
+
     if (req.method === 'GET' && urlPath === '/api/transactions') {
       return sendJson(res, 200, db.listAll());
     }

@@ -87,10 +87,59 @@ async function api(path, options) {
     headers: options?.body ? { 'Content-Type': 'application/json' } : undefined,
     body: options?.body ? JSON.stringify(options.body) : undefined,
   });
+  if (res.status === 401 && path !== '/login') {
+    showLoginScreen();
+    throw new Error('Not authenticated');
+  }
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Request failed');
   return data;
 }
+
+// ---- login gate ----
+// Only ever triggered if the server has APP_PASSWORD set (auth enabled) —
+// local dev with no password configured never hits a 401 in the first place.
+
+const loginScreen = document.getElementById('loginScreen');
+const loginPasswordInput = document.getElementById('loginPasswordInput');
+const loginSubmitBtn = document.getElementById('loginSubmitBtn');
+const loginError = document.getElementById('loginError');
+
+function showLoginScreen() {
+  loginScreen.classList.remove('hidden');
+  loginPasswordInput.focus();
+}
+
+function hideLoginScreen() {
+  loginScreen.classList.add('hidden');
+  loginPasswordInput.value = '';
+  loginError.classList.add('hidden');
+}
+
+async function attemptLogin() {
+  const password = loginPasswordInput.value;
+  if (!password) return;
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+    if (!res.ok) {
+      loginError.classList.remove('hidden');
+      return;
+    }
+    hideLoginScreen();
+    init().catch(() => {});
+  } catch (err) {
+    loginError.classList.remove('hidden');
+  }
+}
+
+loginSubmitBtn.addEventListener('click', attemptLogin);
+loginPasswordInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') attemptLogin();
+});
 
 // ---- filtering ----
 
@@ -833,4 +882,4 @@ async function init() {
   await loadTransactions();
 }
 
-init();
+init().catch(() => {});

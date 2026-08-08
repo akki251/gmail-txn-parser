@@ -639,3 +639,56 @@ body {
 }
 
 .toast.hidden { display: none; }
+
+.login-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.login-screen.hidden { display: none; }
+
+.login-box {
+  width: 100%;
+  max-width: 320px;
+  text-align: center;
+}
+
+.login-box h1 { font-size: 22px; margin: 0 0 4px; }
+.login-box p { color: var(--ink-muted); font-size: 14px; margin: 0 0 20px; }
+
+.login-box input {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--ink);
+  padding: 12px 14px;
+  font-size: 16px;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.login-box .primary {
+  width: 100%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: none;
+  border-radius: 12px;
+  padding: 13px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.login-error {
+  color: var(--review);
+  font-size: 13px;
+  margin-top: 12px !important;
+}
+
+.login-error.hidden { display: none; }
