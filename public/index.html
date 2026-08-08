@@ -66,7 +66,13 @@
   </main>
 
   <main id="suggestedView" class="view hidden">
-    <p class="suggested-intro">Unsplit transactions that look like group expenses — category + amount heuristic, not a trained model. Sorted highest first.</p>
+    <p class="suggested-intro">Unsplit transactions that look like group expenses — category + amount heuristic, not a trained model.</p>
+    <div class="filter-bar">
+      <div class="pill-group" id="suggestedSortPills">
+        <button class="pill active" data-value="amount">Amount</button>
+        <button class="pill" data-value="date">Date</button>
+      </div>
+    </div>
     <div id="suggestedList"></div>
   </main>
 

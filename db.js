@@ -187,7 +187,15 @@ function splitTransaction(transactionId, friendNames, customShares) {
 
   let shares;
   if (customShares) {
-    shares = customShares;
+    // customShares keys come from client input and may not match an
+    // existing friend's stored casing (findOrCreateFriend matches names
+    // case-insensitively) — resolve against the canonical friend.name so
+    // a lookup miss doesn't silently produce NaN shares.
+    shares = {};
+    friends.forEach((f) => {
+      const key = Object.keys(customShares).find((k) => k.toLowerCase() === f.name.toLowerCase());
+      shares[f.name] = key !== undefined ? customShares[key] : 0;
+    });
   } else {
     const n = friends.length + 1;
     const each = Math.round((txn.amount / n) * 100) / 100;

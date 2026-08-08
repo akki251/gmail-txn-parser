@@ -241,7 +241,11 @@ function renderTransactions() {
 
 function renderSuggested() {
   const suggestedListEl = document.getElementById('suggestedList');
-  const candidates = allTransactions.filter(isLikelyShareable).sort((a, b) => b.amount - a.amount);
+  const sortBy = suggestedSortPills.value;
+  const candidates = allTransactions.filter(isLikelyShareable).sort((a, b) => {
+    if (sortBy === 'date') return (b.date || '').localeCompare(a.date || '');
+    return b.amount - a.amount;
+  });
   suggestedListEl.innerHTML = '';
   if (candidates.length === 0) {
     suggestedListEl.innerHTML = '<p class="empty">Nothing looks like a group expense right now.</p>';
@@ -449,8 +453,10 @@ async function renderDetail() {
       ${shareableHint}
       ${allFriends.length > 0 ? `<div class="friend-chips">${chipsHtml}</div>` : ''}
       <input id="detailFriendsInput" type="text" placeholder="friend1, friend2, ..." />
+      <div id="customSplitEditor"></div>
       <div class="sheet-actions">
         <button id="detailSplitBtn" class="primary">Split evenly</button>
+        <button id="customSplitToggleBtn">Custom amounts</button>
         <button id="detailPersonalBtn">Mark personal</button>
       </div>
     `;
@@ -499,6 +505,50 @@ async function renderDetail() {
       } catch (err) {
         showToast('Error: ' + err.message);
       }
+    });
+  }
+
+  const customSplitToggleBtn = document.getElementById('customSplitToggleBtn');
+  if (customSplitToggleBtn) {
+    customSplitToggleBtn.addEventListener('click', () => {
+      const input = document.getElementById('detailFriendsInput');
+      const friends = input.value.split(',').map((s) => s.trim()).filter(Boolean);
+      if (friends.length === 0) return showToast('Enter at least one friend name first');
+
+      const each = Math.round((t.amount / (friends.length + 1)) * 100) / 100;
+      const editor = document.getElementById('customSplitEditor');
+      const rows = friends
+        .map(
+          (name) => `
+        <div class="custom-share-row">
+          <span>${name}</span>
+          <input type="number" step="0.01" min="0" class="custom-share-input" data-name="${name}" value="${each}" />
+        </div>`
+        )
+        .join('');
+      editor.innerHTML = `
+        <div class="custom-share-editor">
+          ${rows}
+          <button id="confirmCustomSplitBtn" class="primary">Confirm custom split</button>
+        </div>
+      `;
+
+      document.getElementById('confirmCustomSplitBtn').addEventListener('click', async () => {
+        const customShares = {};
+        document.querySelectorAll('.custom-share-input').forEach((el) => {
+          customShares[el.dataset.name] = parseFloat(el.value) || 0;
+        });
+        try {
+          const { shares } = await api('/split', { method: 'POST', body: { transactionId: t.id, friends, customShares } });
+          const summary = Object.entries(shares).map(([n, amt]) => `${n} owes ${money(amt)}`).join(', ');
+          showToast(summary);
+          allFriends = await api('/friends');
+          await loadTransactions();
+          await renderDetail();
+        } catch (err) {
+          showToast('Error: ' + err.message);
+        }
+      });
     });
   }
 
@@ -562,6 +612,7 @@ tabs.forEach((tab) => {
 const trendsPeriodPills = initPillGroup('trendsPeriodPills', renderTrends);
 const dateFilterPills = initPillGroup('dateFilterPills', renderTransactions);
 const typeFilterPills = initPillGroup('typeFilterPills', renderTransactions);
+const suggestedSortPills = initPillGroup('suggestedSortPills', renderSuggested);
 
 categoryFilter.addEventListener('change', renderTransactions);
 

@@ -30,6 +30,27 @@ const SMS_PARSERS = [
       };
     },
   },
+  {
+    name: 'OneCard SMS',
+    matchSender: (sender) => /OneCrd/i.test(sender),
+    parse: (text) => {
+      // "Rs. 189.01 sent from OneCard on 06 Aug 2026 to Dominospizza.
+      // Not you? Call on 18002109111 to report -OneCard"
+      const re = /Rs\.?\s?([\d,]+\.?\d*)\s+sent from OneCard on\s+([\d]{1,2}\s+\w{3}\s+\d{4})\s+to\s+(.+?)\./i;
+      const m = text.match(re);
+      if (!m) return null;
+      return {
+        bank: 'OneCard',
+        instrument: 'Credit Card',
+        amount: parseFloat(m[1].replace(/,/g, '')),
+        currency: 'INR',
+        merchant: m[3].trim(),
+        rawDate: m[2],
+        type: 'debit',
+        status: 'Approved',
+      };
+    },
+  },
 ];
 
 function parseTransactionSms({ sender, text }) {

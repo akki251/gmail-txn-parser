@@ -10,6 +10,11 @@ const fixtures = [
       'ICICI Bank Acct XX123 debited for Rs 1.00 on 05-Aug-26; JORDAN LEE credited. UPI:400000000004. Call 18002662 for dispute. SMS BLOCK 123 to 9999999999.',
   },
   {
+    label: 'OneCard — credit card spend',
+    sender: 'OneCrd-S',
+    text: 'Rs. 189.01 sent from OneCard on 06 Aug 2026 to Dominospizza. Not you? Call on 18002109111 to report -OneCard',
+  },
+  {
     label: 'Random personal text — should be IGNORED (not a bank sender)',
     sender: '+919876543210',
     text: 'Can I call you later?',

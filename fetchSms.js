@@ -9,7 +9,7 @@ const CHAT_DB = path.join(os.homedir(), 'Library', 'Messages', 'chat.db');
 
 // Sender handles to pull from chat.db — SQL LIKE patterns, matched against
 // handle.id. Add more as other banks that only alert by SMS turn up.
-const SMS_SENDER_PATTERNS = ['%ICICI%'];
+const SMS_SENDER_PATTERNS = ['%ICICI%', '%OneCrd%'];
 
 // Apple's Core Data absolute time epoch (2001-01-01 00:00:00 UTC), in ms
 // since the Unix epoch. message.date is nanoseconds since this point on

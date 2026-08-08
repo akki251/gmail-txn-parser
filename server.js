@@ -102,11 +102,11 @@ async function handleApi(req, res, urlPath) {
       return sendJson(res, 200, db.ledger());
     }
     if (req.method === 'POST' && urlPath === '/api/split') {
-      const { transactionId, friends } = await readBody(req);
+      const { transactionId, friends, customShares } = await readBody(req);
       if (!transactionId || !Array.isArray(friends) || friends.length === 0) {
         return sendJson(res, 400, { error: 'transactionId and friends[] are required' });
       }
-      const shares = db.splitTransaction(transactionId, friends);
+      const shares = db.splitTransaction(transactionId, friends, customShares);
       return sendJson(res, 200, { shares });
     }
     if (req.method === 'POST' && urlPath === '/api/personal') {
