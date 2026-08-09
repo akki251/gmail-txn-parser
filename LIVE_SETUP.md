@@ -45,10 +45,10 @@ you won't need to re-auth on future runs.
 Any known-bank-sender message that doesn't match the regex falls through
 to `llmFallback.js`, which needs:
 ```
-export GEMINI_API_KEY=...
+export GROQ_API_KEY=...
 ```
 set in your shell before running. Get a free key from
-[aistudio.google.com](https://aistudio.google.com). If a message fails
+[console.groq.com](https://console.groq.com). If a message fails
 *both* the regex and the LLM fallback (e.g. free-tier quota), it's still
 not lost — it's stored flagged `needsReview` with the raw text intact,
 visible in the PWA, and retried automatically on every future fetch.
@@ -78,7 +78,7 @@ Two `launchd` jobs — templates are in `launchd/` in this repo. Copy
 both into `~/Library/LaunchAgents/`, then in **each** file replace:
 - `/ABSOLUTE/PATH/TO/gmail-txn-parser` with this repo's actual path
 - `/ABSOLUTE/PATH/TO/HOME` with your home directory
-- `YOUR_GEMINI_API_KEY` with your real key
+- `YOUR_GROQ_API_KEY` with your real key
 - `com.example.` with something identifying yours (e.g. `com.yourname.`)
 
 ```

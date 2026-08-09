@@ -3,7 +3,7 @@
  * didn't (bank changed their email template). Costs a tiny API call, but
  * only fires on the rare mismatch — not on every email.
  *
- * Requires GEMINI_API_KEY in the environment.
+ * Requires GROQ_API_KEY in the environment.
  */
 
 const SYSTEM_PROMPT = `You extract structured transaction data from Indian bank/card transaction alert emails.
@@ -22,22 +22,26 @@ Output ONLY valid JSON, no preamble, no markdown fences, matching this shape exa
 If the email is not actually a transaction alert (e.g. an offer, a statement reminder, a failed-payment notice with no real debit), output {"notATransaction": true} instead.`;
 
 async function llmFallbackExtract(rawText) {
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents: [{ role: 'user', parts: [{ text: rawText }] }],
-      }),
-    }
-  );
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: rawText },
+      ],
+      response_format: { type: 'json_object' },
+    }),
+  });
 
   const data = await response.json();
-  if (data.error) throw new Error(data.error.message || 'Gemini API error');
+  if (data.error) throw new Error(data.error.message || 'Groq API error');
 
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  const text = data.choices?.[0]?.message?.content;
   if (!text) throw new Error('No text response from model');
 
   const cleaned = text.replace(/```json|```/g, '').trim();
