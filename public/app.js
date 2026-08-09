@@ -477,6 +477,7 @@ async function renderDetail() {
   ];
   if (t.paymentMode) fieldRows.push(['Payment mode', t.paymentMode]);
   if (t.refNo) fieldRows.push(['Reference no.', t.refNo]);
+  if (t.orderId) fieldRows.push(['Order ID', t.orderId]);
 
   const fieldsHtml = fieldRows
     .map(([label, value]) => `<div class="detail-field"><span>${label}</span><strong>${value}</strong></div>`)

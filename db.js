@@ -19,13 +19,40 @@ function save(db) {
 // ---- transactions ----
 
 // Same real-world transaction can arrive via two channels (e.g. a bank's
-// email + SMS alert for the same payment) with different message IDs, so
-// messageId-based idempotency alone won't catch it. refNo (a UPI reference
-// number) is shared across every channel for the same transaction, so it's
-// checked first as a strong signal; same bank + amount + type within a
-// short window is a weaker fallback for when refNo isn't available on one
-// side.
+// email + SMS alert for the same payment, or a Swiggy/Zomato order email
+// alongside the bank's own alert for that same order) with different
+// message IDs, so messageId-based idempotency alone won't catch it. refNo
+// (a UPI reference number) is shared across every bank channel for the
+// same transaction, so it's checked first as a strong signal; same
+// bank/amount/type within a short window is a weaker fallback for when
+// refNo isn't available on one side.
 const CROSS_SOURCE_WINDOW_MS = 5 * 60 * 1000;
+
+// Merchant-order emails (Swiggy/Zomato) aren't sent at a consistent point
+// relative to the actual payment — a Dineout payment confirmation arrives
+// within seconds (verified: 24s gap on a real pair), but a regular food
+// delivery's "was delivered" email is sent at *delivery* time, which can
+// trail the bank's payment alert by the actual delivery duration (verified
+// real gap: ~21 minutes). 45 minutes covers a realistic delivery window
+// with margin, without being so wide it risks matching two genuinely
+// unrelated same-amount transactions — the brand-mention check below is
+// the real safety net for that, not the window size.
+const MERCHANT_CROSS_TYPE_WINDOW_MS = 45 * 60 * 1000;
+
+// Merchant-sourced records (sourceType: 'merchant', e.g. Swiggy/Zomato)
+// don't share a "bank" identity with a bank-sourced record for the same
+// order, so same-bank can't be the match condition there. Instead:
+// exactly one side must be merchant-sourced, and the *other* (bank) side's
+// own bank/merchant text must mention the merchant brand — e.g. a bank
+// record with merchant "SWIGGY PVT LTD FOOD2" mentions "swiggy". Amount +
+// time alone isn't enough signal once same-bank is no longer required;
+// this brand-mention check is what keeps two unrelated same-amount
+// transactions within the window from false-matching.
+function crossTypeBrandMatch(a, b) {
+  if (a.sourceType !== 'merchant' || b.sourceType === 'merchant') return false;
+  const bankText = `${b.bank || ''} ${b.merchant || ''}`.toLowerCase();
+  return bankText.includes((a.bank || '').toLowerCase());
+}
 
 function findCrossSourceDuplicate(db, parsed, isoDate) {
   const candidates = Object.values(db.transactions);
@@ -38,9 +65,14 @@ function findCrossSourceDuplicate(db, parsed, isoDate) {
   if (isoDate && typeof parsed.amount === 'number') {
     const targetMs = new Date(isoDate).getTime();
     const byAmountAndTime = candidates.find((t) => {
-      if (t.bank !== parsed.bank || t.type !== parsed.type || t.amount !== parsed.amount) return false;
+      if (t.type !== parsed.type || t.amount !== parsed.amount) return false;
       if (!t.date) return false;
-      return Math.abs(new Date(t.date).getTime() - targetMs) <= CROSS_SOURCE_WINDOW_MS;
+      const gapMs = Math.abs(new Date(t.date).getTime() - targetMs);
+
+      if (t.bank === parsed.bank) return gapMs <= CROSS_SOURCE_WINDOW_MS;
+
+      const isCrossType = crossTypeBrandMatch(parsed, t) || crossTypeBrandMatch(t, parsed);
+      return isCrossType && gapMs <= MERCHANT_CROSS_TYPE_WINDOW_MS;
     });
     if (byAmountAndTime) return byAmountAndTime;
   }
