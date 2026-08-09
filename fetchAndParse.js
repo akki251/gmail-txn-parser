@@ -1,6 +1,7 @@
 const { google } = require('googleapis');
 const { authorize } = require('./auth');
 const { parseTransactionEmail } = require('./bankParsers');
+const { parseMerchantEmail } = require('./merchantParsers');
 const { llmFallbackExtract } = require('./llmFallback');
 const db = require('./db');
 
@@ -13,6 +14,11 @@ const BANK_SENDERS = [
   'alerts@hdfcbank.bank.in',
   'alerts@axis.bank.in',
 ];
+
+// Merchant order-confirmation senders — a second, independent transaction
+// source (see merchantParsers.js) for spend that may never generate a
+// matching bank alert.
+const MERCHANT_SENDERS = ['noreply@swiggy.in', 'noreply@zomato.com'];
 
 function decodeBase64Url(data) {
   return Buffer.from(data, 'base64').toString('utf-8');
@@ -54,15 +60,15 @@ async function main() {
     console.log('');
   }
 
-  const senderQuery = BANK_SENDERS.map((s) => `from:${s}`).join(' OR ');
+  const senderQuery = [...BANK_SENDERS, ...MERCHANT_SENDERS].map((s) => `from:${s}`).join(' OR ');
   const { data: list } = await gmail.users.messages.list({
     userId: 'me',
     q: `(${senderQuery}) newer_than:30d`,
-    maxResults: 25,
+    maxResults: 50,
   });
 
   const messages = list.messages || [];
-  console.log(`Found ${messages.length} candidate messages from known bank senders.\n`);
+  console.log(`Found ${messages.length} candidate messages from known bank/merchant senders.\n`);
 
   const results = [];
   for (const ref of messages) {
@@ -79,6 +85,7 @@ async function main() {
     const isoDate = msg.internalDate ? new Date(Number(msg.internalDate)).toISOString() : null;
 
     let result = parseTransactionEmail({ sender, htmlBody, plaintextBody });
+    if (!result) result = parseMerchantEmail({ sender, htmlBody, plaintextBody });
     if (!result) continue;
 
     if (result.needsLLMFallback) {

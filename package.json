@@ -6,6 +6,7 @@
     "test": "node test.js",
     "test:split": "node test-split-flow.js",
     "test:sms": "node test-sms.js",
+    "test:merchant": "node test-merchant.js",
     "fetch": "node fetchAndParse.js",
     "fetch:sms": "node fetchSms.js",
     "cli": "node cli.js",

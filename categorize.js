@@ -34,7 +34,20 @@ function looksLikePersonName(merchant) {
   return /^[A-Za-z]+(\s[A-Za-z]+){1,3}$/.test(merchant.trim()) && !/[*]/.test(merchant);
 }
 
+// A record's own `bank` field can itself identify the category regardless
+// of what the specific merchant/restaurant name looks like — e.g. a
+// Swiggy/Zomato order for "Kannu Ki Chai" (three Title Case words, no
+// punctuation) would otherwise false-match looksLikePersonName below and
+// get miscategorized as a Transfer.
+const BANK_RULES = [{ category: 'Food & Dining', pattern: /^(Swiggy|Zomato)/i }];
+
 function categorize(merchant, bank) {
+  if (bank) {
+    for (const rule of BANK_RULES) {
+      if (rule.pattern.test(bank)) return rule.category;
+    }
+  }
+
   if (!merchant) return 'Other';
   const trimmed = merchant.trim();
 

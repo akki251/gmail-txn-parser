@@ -19,6 +19,7 @@ function stripHtml(html) {
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ')
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/gi, ' ')
+    .replace(/ /g, ' ')
     .replace(/&amp;/gi, '&')
     .replace(/&#8377;/g, '\u20B9')
     .replace(/\r\n/g, '\n')
