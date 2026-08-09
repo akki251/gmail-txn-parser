@@ -132,7 +132,9 @@ function getTransaction(id) {
 
 function listAll() {
   const db = load();
-  return Object.values(db.transactions).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  return Object.values(db.transactions)
+    .filter((t) => !t.notATransaction)
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 }
 
 function listUnsplit() {
