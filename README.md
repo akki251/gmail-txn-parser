@@ -47,7 +47,7 @@ npm run test:sms    # SMS parser fixtures
 ```
 
 Then walk through **[`LIVE_SETUP.md`](LIVE_SETUP.md)** for the real
-setup: your own Google Cloud OAuth credentials, a free Gemini API key,
+setup: your own Google Cloud OAuth credentials, a free Groq API key,
 optional SMS forwarding, background scheduling via `launchd`, and phone
 access via Tailscale.
 

@@ -50,7 +50,7 @@ Proven and working end-to-end against real bank data:
 bankParsers.js       regex extraction per bank sender (email), pure functions, no I/O
 smsParsers.js        regex extraction per bank sender (SMS), same shape as bankParsers.js
 categorize.js         deterministic merchant -> category keyword matcher
-llmFallback.js         Gemini API call, used only when a known sender's regex misses
+llmFallback.js         Groq API call, used only when a known sender's regex misses
 db.js                  flat-JSON local store: transactions, friends, splits, ledger, dedupe, needs-review
 auth.js                 Google OAuth2 loopback flow for this script's own Gmail access
 fetchAndParse.js        Gmail -> bankParsers -> db.js
@@ -111,7 +111,7 @@ Split: `{ id, transactionId, friendId, shareAmount, settled }`
 
 ## Setting this up for your own use
 Walk `LIVE_SETUP.md` end to end — it covers Google Cloud OAuth setup,
-the Gemini API key, the two `launchd` jobs, and (optionally) SMS
+the Groq API key, the two `launchd` jobs, and (optionally) SMS
 forwarding + Tailscale for phone access. Your bank almost certainly uses
 a different email/SMS template than the ones already parsed here — the
 existing parsers are a reference implementation, not a universal one.
