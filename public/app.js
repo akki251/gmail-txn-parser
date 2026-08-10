@@ -666,17 +666,34 @@ const suggestedSortPills = initPillGroup('suggestedSortPills', renderSuggested);
 
 categoryFilter.addEventListener('change', renderTransactions);
 
-refreshBtn.addEventListener('click', async () => {
+async function performRefresh({ silent } = {}) {
   refreshBtn.classList.add('spinning');
   try {
     await api('/refresh', { method: 'POST' });
-    showToast('Fetched latest from Gmail');
+    if (!silent) showToast('Fetched latest from Gmail');
     await loadTransactions();
   } catch (err) {
-    showToast('Refresh failed: ' + err.message);
+    if (!silent) showToast('Refresh failed: ' + err.message);
   } finally {
     refreshBtn.classList.remove('spinning');
   }
+}
+
+refreshBtn.addEventListener('click', () => performRefresh());
+
+// Auto-refresh whenever the page is opened/resumed, so you don't have to
+// remember to tap the refresh button — throttled so re-opening the tab
+// repeatedly in a short span doesn't hammer the Gmail API.
+const AUTO_REFRESH_MIN_GAP_MS = 5 * 60 * 1000;
+function maybeAutoRefresh() {
+  const last = Number(localStorage.getItem('lastAutoRefresh') || 0);
+  if (Date.now() - last < AUTO_REFRESH_MIN_GAP_MS) return;
+  localStorage.setItem('lastAutoRefresh', String(Date.now()));
+  performRefresh({ silent: true });
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') maybeAutoRefresh();
 });
 
 async function loadTransactions() {
@@ -881,6 +898,7 @@ async function init() {
   populateCategoryFilter();
   allFriends = await api('/friends');
   await loadTransactions();
+  maybeAutoRefresh();
 }
 
 init().catch(() => {});
