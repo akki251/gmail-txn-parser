@@ -12,7 +12,7 @@ const fixtures = [
     label: 'Swiggy — food order',
     sender: 'noreply@swiggy.in',
     plaintextBody:
-      'Delivery in 21 mins! ORDER JOURNEY Aamhi Pohekar AAMHI POHEKAR near shitole petrol bunk , sai chowk, navi sangavi, pune , 411027 Aug 7, 10:29 AM Akshansh B wing flat no 18, 3rd floor, Shambhu Vihar Society, Aundh, Pune, Maharashtra, India. (243/22), Pune Aug 7, 10:51 AM Order ID: 245048394104709 BILL DETAILS Nagpuri Tarri Pohe x1 ₹40 Indori Pohe x1 ₹35 Platform fee with GST ₹17.58 Delivery Fee | 3.5 kms ₹33 Taxes ₹9.69 Paid Via Credit/Debit card ₹135 Disclaimer : Attached is the invoice for the restaurant services provided by the outlet.',
+      'Delivery in 21 mins! ORDER JOURNEY Aamhi Pohekar AAMHI POHEKAR near shitole petrol bunk , sai chowk, navi sangavi, pune , 411027 Aug 7, 10:29 AM Jordan Lee 4th floor, Placeholder Residency, MG Road, Pune, Maharashtra, India. (101/22), Pune Aug 7, 10:51 AM Order ID: 245048394104709 BILL DETAILS Nagpuri Tarri Pohe x1 ₹40 Indori Pohe x1 ₹35 Platform fee with GST ₹17.58 Delivery Fee | 3.5 kms ₹33 Taxes ₹9.69 Paid Via Credit/Debit card ₹135 Disclaimer : Attached is the invoice for the restaurant services provided by the outlet.',
   },
   {
     label: 'Swiggy — Dineout payment (real newline between "Total Paid" and the amount)',
@@ -24,19 +24,19 @@ const fixtures = [
     label: 'Zomato — "Thank you for ordering from X" template (real NBSP between "ordering" and "from")',
     sender: 'noreply@zomato.com',
     plaintextBody:
-      'Hi Akshansh Shrivastava, \n Thank you for ordering from Kannu Ki Chai \n ORDER ID: 8419507103                                           \n Delivered \n Kannu Ki Chai \n Survey 137/1 And 138/1A/2/2a, Plot O, Shop 2, Ground Floor, Rahul Park Cooperative, Gaikwad Nagar, Aundh, Pune \n 1 X Adrak Chai \n 1 X Puneri Poha \n Total paid - ₹251.58',
+      'Hi Jordan Lee, \n Thank you for ordering from Kannu Ki Chai \n ORDER ID: 8419507103                                           \n Delivered \n Kannu Ki Chai \n Survey 137/1 And 138/1A/2/2a, Plot O, Shop 2, Ground Floor, Rahul Park Cooperative, Gaikwad Nagar, Aundh, Pune \n 1 X Adrak Chai \n 1 X Puneri Poha \n Total paid - ₹251.58',
   },
   {
     label: 'Zomato — "Your order from X was delivered" template (second real template, different wording entirely)',
     sender: 'noreply@zomato.com',
     plaintextBody:
-      'Zoooooooooooop! That was quick. \n Hi Akshansh Shrivastava, Your order from Kota Kachori & Namkeens was delivered in just 24 minutes . \n ORDER ID: 8457077423 \n Delivered \n Kota Kachori & Namkeens \n Opposite Florencia Society, Kaspate Vasti Road, Wakad, Pune \n 1 X Kadhi Kachori [2 Pieces] \n 1 X Milk Cake \n Total paid - ₹188.33',
+      'Zoooooooooooop! That was quick. \n Hi Jordan Lee, Your order from Kota Kachori & Namkeens was delivered in just 24 minutes . \n ORDER ID: 8457077423 \n Delivered \n Kota Kachori & Namkeens \n Opposite Florencia Society, Kaspate Vasti Road, Wakad, Pune \n 1 X Kadhi Kachori [2 Pieces] \n 1 X Milk Cake \n Total paid - ₹188.33',
   },
   {
     label: 'Swiggy — cancelled order — should be IGNORED (not a transaction)',
     sender: 'noreply@swiggy.in',
     plaintextBody:
-      'Hi Akshansh , Thanks for using Swiggy! Your Swiggy order #244869395148908 is cancelled as the ordered item(s) are now out of stock at the restaurant. This happens rarely and we apologise for the inconvenience. Order No: #244869395148908 Restaurant: Tea Post Cancelation Time: 2026-08-05 09:39 Total Refund Rs.229.0',
+      'Hi Jordan , Thanks for using Swiggy! Your Swiggy order #244869395148908 is cancelled as the ordered item(s) are now out of stock at the restaurant. This happens rarely and we apologise for the inconvenience. Order No: #244869395148908 Restaurant: Tea Post Cancelation Time: 2026-08-05 09:39 Total Refund Rs.229.0',
   },
   {
     label: 'Unrelated sender — should be IGNORED (not a merchant we track)',

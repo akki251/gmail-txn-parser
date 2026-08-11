@@ -1,6 +1,13 @@
 {
   "name": "gmail-txn-parser",
   "version": "0.1.0",
+  "description": "Watches Gmail (and SMS via an iOS Shortcut) for bank transaction alerts, parses them, categorizes spend, and splits expenses with friends via a self-hosted PWA.",
+  "license": "MIT",
+  "author": "akki251",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/akki251/gmail-txn-parser"
+  },
   "private": true,
   "scripts": {
     "test": "node test.js",
