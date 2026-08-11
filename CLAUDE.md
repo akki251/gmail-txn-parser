@@ -1,11 +1,11 @@
 # gmail-txn-parser — CLAUDE.md
 
-**Branch note**: this is the `gmail-only` branch — email-only, no SMS/Mac
-dependency, deployable to any Linux server or cloud VM. The `main` branch
-carries the additional SMS-via-Mac-Messages path for banks that only
-alert by SMS; SMS-sourced historical data in `db.json` still displays
-fine here (it's just data), this branch just can't ingest *new* SMS
-transactions. See "Branching" below.
+**Branch note**: this is the `gmail-sms-shortcut` branch — same
+Mac-independent, cloud-deployable base as `gmail-only`, plus SMS-only
+bank alerts ingested via an iOS Shortcuts automation that POSTs the SMS
+to this server's `/api/sms-ingest` the moment it arrives, instead of
+`main`'s Mac/`chat.db` read. No Mac needed for either email or SMS on
+this branch. See "Branching" below.
 
 ## What this is
 A personal tool: watches your Gmail for bank transaction alerts, parses
@@ -44,16 +44,18 @@ Proven and working end-to-end against real bank data:
 ## File map
 ```
 bankParsers.js       regex extraction per bank sender, pure functions, no I/O
+smsParsers.js          regex extraction per bank SMS sender, pure functions, no I/O
+merchantParsers.js      regex extraction for Swiggy/Zomato order emails
 categorize.js         deterministic merchant -> category keyword matcher
 llmFallback.js         Groq API call, used only when a known sender's regex misses
 db.js                  flat-JSON local store: transactions, friends, splits, ledger, dedupe, needs-review
 auth.js                 Google OAuth2 loopback flow for this script's own Gmail access
-fetchAndParse.js        Gmail -> bankParsers -> db.js
+fetchAndParse.js        Gmail -> bankParsers/merchantParsers -> db.js
 fetch-all.sh              thin wrapper (just fetchAndParse.js on this branch); used by launchd + the PWA's refresh button
 cli.js                    review/split/settle from the terminal
-server.js                  PWA backend: REST API + static file serving
+server.js                  PWA backend: REST API + static file serving + POST /api/sms-ingest (SMS webhook)
 public/                     PWA frontend (vanilla JS, no build step, no framework)
-test.js / test-split-flow.js   fixtures pulled from real messages + isolated db.js logic tests
+test.js / test-sms.js / test-merchant.js / test-split-flow.js   fixtures pulled from real messages + isolated db.js logic tests
 webhook.js                  sketch only, unused — future push-based path (Gmail watch + Pub/Sub) if polling ever feels slow
 README.md / LIVE_SETUP.md    human-facing docs
 ```
@@ -103,9 +105,15 @@ Split: `{ id, transactionId, friendId, shareAmount, settled }`
 - `main` — full version, includes SMS parsing (`smsParsers.js`,
   `fetchSms.js`) for banks that only alert by SMS, via a Mac's local
   Messages database. Requires a Mac kept awake, Full Disk Access grants.
-- `gmail-only` (this branch) — email-only, no Mac/SMS dependency,
-  deployable anywhere Node runs. Chosen when the tradeoff (losing
-  SMS-only banks entirely) is worth simplifying the deployment story.
+- `gmail-only` — email-only, no Mac/SMS dependency, deployable anywhere
+  Node runs. Chosen when the tradeoff (losing SMS-only banks entirely)
+  is worth simplifying the deployment story.
+- `gmail-sms-shortcut` (this branch) — `gmail-only`'s cloud-deployable
+  base plus SMS-only bank alerts, but sourced from an iOS Shortcuts
+  automation pushing to `POST /api/sms-ingest` instead of a Mac's
+  `chat.db`. Gets SMS coverage *and* stays Mac-independent — the
+  Shortcut runs on the phone that already receives the SMS, no
+  intermediate device needed at all.
 
 ## Deploying to the cloud (this branch)
 Since there's no `chat.db`/Mac dependency here, this can run on any
@@ -120,6 +128,10 @@ Linux VM or a free-tier cloud box:
    (or just `pm2`/`forever`) keeping `server.js` running continuously.
 4. Tailscale still works identically installed on the cloud box instead
    of a Mac — same private-network model, nothing publicly exposed.
+5. Set `SMS_INGEST_SECRET` alongside the other env vars if you're using
+   the iOS Shortcuts SMS path (`LIVE_SETUP.md` step 5) — the server
+   needs to be reachable from your phone (same URL the PWA itself uses)
+   for the Shortcut's POST to land.
 
 ## Setting this up for your own use
 Walk `LIVE_SETUP.md` end to end. Your bank almost certainly uses a

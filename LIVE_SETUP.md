@@ -1,13 +1,16 @@
 # Running this against your real inbox
 
-**Branch: `gmail-only`** — email-only, no Mac/SMS dependency. See `main`
-if you also want SMS-only bank alerts (needs a Mac).
+**Branch: `gmail-sms-shortcut`** — email-only ingestion (no Mac/`chat.db`
+dependency) plus SMS-only bank alerts via an iOS Shortcuts automation
+instead of a Mac (see step 6). See `main` if you'd rather use the
+Mac/`chat.db`-based SMS path instead.
 
 ## 0. Right now, zero setup
 ```
 npm install
 npm test
 npm run test:split
+npm run test:sms
 ```
 These run against hardcoded fixtures — prove the extraction/split/dedupe
 logic works, touch no real accounts, need no keys.
@@ -68,12 +71,43 @@ Until you've added your bank, its messages just sit unread — nothing
 breaks, they're simply invisible to this tool (see `CLAUDE.md`'s
 sender-allowlist rationale).
 
-Want SMS-only bank alerts too (banks that never email, only text)? See
-the `main` branch — that needs a Mac kept awake for Apple's iPhone Text
-Message Forwarding + a local Messages database read, which is the whole
-reason this branch exists as a separate, simpler, Mac-independent path.
+## 5. SMS-only banks, via an iOS Shortcut (no Mac needed)
+Some banks only send UPI/transaction alerts by SMS, never email. Instead
+of the `main` branch's Mac/`chat.db` approach, this branch receives those
+SMS directly from your iPhone via a Shortcuts automation that POSTs the
+message to this server the moment it arrives — nothing to keep awake.
 
-## 5. Run it in the background (so it keeps working without you)
+1. Set a secret on the server (same `.env`/`ecosystem.config.js`/shell
+   export pattern as `GROQ_API_KEY`):
+   ```
+   export SMS_INGEST_SECRET=... # any long random string
+   ```
+2. On your iPhone: **Shortcuts app → Automation tab → + → Create Personal
+   Automation → Message**. Leave "Sender" blank (filtering happens
+   server-side via the sender allowlist in `smsParsers.js`, same as the
+   email allowlist) and turn on "Any Sender". Tap Next.
+3. Add one action: **Get Contents of URL**.
+   - URL: `https://<your-server>/api/sms-ingest`
+   - Method: POST
+   - Headers: `X-Sms-Secret` = the secret from step 1, `Content-Type` = `application/json`
+   - Request Body → JSON, with fields:
+     - `sender` → the trigger's **Message → Sender** magic variable
+     - `text` → the trigger's **Message → Message Content** magic variable
+     - `date` → the trigger's **Message → Date Received** magic variable
+4. Save, then turn **off** "Ask Before Running" (Shortcuts details view for
+   the automation) so it fires silently in the background. iOS may show a
+   one-time confirmation the first time it actually runs.
+5. Add your bank's real SMS sender ID + a regex to `smsParsers.js`,
+   following the same real-fixture rule as email parsers — pull one real
+   message, write the regex against it, add it as a fixture in
+   `test-sms.js`, confirm `npm run test:sms` passes.
+
+Unknown senders are silently ignored (200 response, nothing stored) —
+same sender-allowlist philosophy as email. A known sender whose template
+doesn't match falls back to the LLM, then to `needsReview` if that also
+fails — never silently dropped, same guarantee as every other source.
+
+## 6. Run it in the background (so it keeps working without you)
 Two `launchd` jobs — templates are in `launchd/` in this repo. Copy
 both into `~/Library/LaunchAgents/`, then in **each** file replace:
 - `/ABSOLUTE/PATH/TO/gmail-txn-parser` with this repo's actual path
@@ -105,7 +139,7 @@ tail -f ~/Library/Logs/gmail-txn-parser.log
 tail -f ~/Library/Logs/gmail-txn-parser-server.log
 ```
 
-## 6. View and split from your iPhone (PWA over Tailscale)
+## 7. View and split from your iPhone (PWA over Tailscale)
 The web UI at port 4173 is only reachable on your Mac's own network
 interfaces by default — no auth layer, since it's meant to be private.
 [Tailscale](https://tailscale.com) (free for personal use) makes it

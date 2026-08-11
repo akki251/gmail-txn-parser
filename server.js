@@ -5,6 +5,8 @@ const crypto = require('crypto');
 const { execFile } = require('child_process');
 const db = require('./db');
 const { CATEGORIES } = require('./categorize');
+const { parseTransactionSms } = require('./smsParsers');
+const { llmFallbackExtract } = require('./llmFallback');
 
 const PORT = 4173;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -87,8 +89,57 @@ function serveStatic(req, res, urlPath) {
   });
 }
 
+// Handles a single incoming SMS forwarded from the iOS Shortcuts automation
+// (see LIVE_SETUP.md) — same regex-first, LLM-fallback, needsReview-safety-net
+// pipeline as fetchAndParse.js/fetchSms.js, just triggered by a push instead
+// of a poll. messageId is derived (sender+text+date hash) since Shortcuts has
+// no equivalent to Gmail's messageId — same value every time the same SMS is
+// forwarded, so retried/duplicate deliveries from the Shortcut are naturally
+// idempotent via db.js's existing dedupe-by-id check.
+async function handleSmsIngest(req, res) {
+  const { sender, text, date } = await readBody(req);
+  if (!sender || !text) return sendJson(res, 400, { error: 'sender and text are required' });
+
+  const isoDate = date ? new Date(date).toISOString() : new Date().toISOString();
+  const id = crypto.createHash('sha1').update(`${sender}|${text}|${isoDate}`).digest('hex');
+
+  let result = parseTransactionSms({ sender, text });
+  if (!result) return sendJson(res, 200, { ok: true, stored: false, reason: 'not a known SMS sender' });
+
+  if (result.needsLLMFallback) {
+    try {
+      const extracted = await llmFallbackExtract(result.rawText);
+      if (extracted.notATransaction) return sendJson(res, 200, { ok: true, stored: false, reason: 'not a transaction' });
+      result = { ...extracted, sourceParser: result.sourceParser, needsLLMFallback: true };
+    } catch (err) {
+      db.upsertTransaction(id, {
+        needsReview: true,
+        sourceParser: result.sourceParser,
+        rawText: result.rawText,
+        sender,
+        lastFailureReason: err.message,
+      }, isoDate);
+      return sendJson(res, 200, { ok: true, stored: true, needsReview: true });
+    }
+  }
+
+  const inserted = db.upsertTransaction(id, result, isoDate);
+  return sendJson(res, 200, { ok: true, stored: inserted });
+}
+
 async function handleApi(req, res, urlPath) {
   try {
+    if (req.method === 'POST' && urlPath === '/api/sms-ingest') {
+      const expected = process.env.SMS_INGEST_SECRET || '';
+      const given = req.headers['x-sms-secret'] || '';
+      const match =
+        expected.length > 0 &&
+        given.length === expected.length &&
+        crypto.timingSafeEqual(Buffer.from(given), Buffer.from(expected));
+      if (!match) return sendJson(res, 401, { error: 'Invalid or missing secret' });
+      return handleSmsIngest(req, res);
+    }
+
     if (req.method === 'POST' && urlPath === '/api/login') {
       const { password } = await readBody(req);
       const expected = process.env.APP_PASSWORD || '';
