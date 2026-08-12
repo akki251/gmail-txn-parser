@@ -45,6 +45,14 @@ function money(n) {
   return '₹' + Number(n).toFixed(2);
 }
 
+// Transaction fields (merchant, bank, raw SMS/email text) originate from
+// parsed messages, not from a trusted schema — escape before interpolating
+// into innerHTML so a crafted message body can't inject markup.
+const ESCAPE_HTML_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+function escapeHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, (ch) => ESCAPE_HTML_MAP[ch]);
+}
+
 function showToast(msg) {
   toast.textContent = msg;
   toast.classList.remove('hidden');
@@ -220,20 +228,20 @@ function buildTxnRow(t) {
     badgeText = '⚠ needs review';
     amountHtml = '';
     titleText = 'Unparsed message';
-    metaText = t.sourceParser || t.sender || '';
+    metaText = escapeHtml(t.sourceParser || t.sender || '');
   } else {
     const sign = t.type === 'credit' ? '+' : '-';
     badgeClass = t.status === 'Declined' ? 'badge declined' : `badge ${t.splitStatus}`;
     badgeText = t.status === 'Declined' ? 'declined' : t.splitStatus;
     amountHtml = `<div class="txn-amount ${t.type}">${sign}${money(t.amount)}</div>`;
-    titleText = (done ? '✓ ' : '') + (t.merchant || '(no merchant)');
-    metaText = `${t.bank || t.sourceParser || ''} · ${t.category || 'Other'}`;
+    titleText = escapeHtml((done ? '✓ ' : '') + (t.merchant || '(no merchant)'));
+    metaText = escapeHtml(`${t.bank || t.sourceParser || ''} · ${t.category || 'Other'}`);
   }
 
   const suggestedTag = !t.needsReview && isLikelyShareable(t) ? '<div class="tag-suggested">💡 Suggested</div>' : '';
 
   row.innerHTML = `
-    <div class="txn-avatar" style="background:${avatarColor(t.bank || t.sourceParser || '?')}">${avatarInitials(t.bank || t.sourceParser)}</div>
+    <div class="txn-avatar" style="background:${avatarColor(t.bank || t.sourceParser || '?')}">${escapeHtml(avatarInitials(t.bank || t.sourceParser))}</div>
     <div class="txn-main">
       <div class="txn-merchant">${titleText}</div>
       <div class="txn-meta">${metaText}</div>
@@ -391,9 +399,9 @@ function renderLedger(balances) {
     const row = document.createElement('div');
     row.className = 'ledger-row';
     row.innerHTML = `
-      <div class="ledger-name">${name}</div>
+      <div class="ledger-name">${escapeHtml(name)}</div>
       <div class="ledger-amount">${money(balances[name])}</div>
-      <button class="settle-btn" data-name="${name}">Settle</button>
+      <button class="settle-btn" data-name="${escapeHtml(name)}">Settle</button>
     `;
     row.querySelector('.settle-btn').addEventListener('click', async () => {
       try {
@@ -439,15 +447,15 @@ async function renderDetail() {
         ⚠ This message matched a known sender but couldn't be parsed automatically.
         Nothing was lost — here's the raw text. It'll retry automatically on the
         next scheduled fetch, or you can retry it now.
-        ${t.lastFailureReason ? `<br><br><strong>Last error:</strong> ${t.lastFailureReason}` : ''}
+        ${t.lastFailureReason ? `<br><br><strong>Last error:</strong> ${escapeHtml(t.lastFailureReason)}` : ''}
       </div>
       <h4>Source</h4>
       <div class="detail-fields">
-        <div class="detail-field"><span>Parser</span><strong>${t.sourceParser || '—'}</strong></div>
-        <div class="detail-field"><span>Sender</span><strong>${t.sender || '—'}</strong></div>
+        <div class="detail-field"><span>Parser</span><strong>${escapeHtml(t.sourceParser || '—')}</strong></div>
+        <div class="detail-field"><span>Sender</span><strong>${escapeHtml(t.sender || '—')}</strong></div>
       </div>
       <h4>Raw message</h4>
-      <div class="review-rawtext">${(t.rawText || '').replace(/</g, '&lt;')}</div>
+      <div class="review-rawtext">${escapeHtml(t.rawText || '')}</div>
       <div class="sheet-actions">
         <button id="retryReviewBtn" class="primary">Retry now</button>
       </div>
@@ -480,7 +488,7 @@ async function renderDetail() {
   if (t.orderId) fieldRows.push(['Order ID', t.orderId]);
 
   const fieldsHtml = fieldRows
-    .map(([label, value]) => `<div class="detail-field"><span>${label}</span><strong>${value}</strong></div>`)
+    .map(([label, value]) => `<div class="detail-field"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`)
     .join('');
 
   const splittable = t.type === 'debit' && t.status !== 'Declined' && t.splitStatus === 'unsplit';
@@ -488,15 +496,15 @@ async function renderDetail() {
   let actionHtml = '';
   if (t.splitStatus === 'split' && t.splits.length > 0) {
     const rows = t.splits
-      .map((s) => `<div class="split-row"><span>${s.friendName}</span><strong>${money(s.shareAmount)}</strong><span class="settle-state">${s.settled ? 'settled' : 'owed'}</span></div>`)
+      .map((s) => `<div class="split-row"><span>${escapeHtml(s.friendName)}</span><strong>${money(s.shareAmount)}</strong><span class="settle-state">${s.settled ? 'settled' : 'owed'}</span></div>`)
       .join('');
     actionHtml = `<h4>Split with</h4><div class="split-breakdown">${rows}</div>`;
   } else if (splittable) {
     const chipsHtml = allFriends
-      .map((f) => `<button class="friend-chip" data-name="${f.name}">${f.name}</button>`)
+      .map((f) => `<button class="friend-chip" data-name="${escapeHtml(f.name)}">${escapeHtml(f.name)}</button>`)
       .join('');
     const shareableHint = isLikelyShareable(t)
-      ? `<div class="shareable-hint">💡 This looks like it might be a group expense — ${t.category.toLowerCase()} over ₹${SHAREABLE_AMOUNT_THRESHOLD}. Just a starting guess, not a trained model — say the word if it's off and I'll adjust the rule.</div>`
+      ? `<div class="shareable-hint">💡 This looks like it might be a group expense — ${escapeHtml(t.category.toLowerCase())} over ₹${SHAREABLE_AMOUNT_THRESHOLD}. Just a starting guess, not a trained model — say the word if it's off and I'll adjust the rule.</div>`
       : '';
     actionHtml = `
       <h4>Split this transaction</h4>
@@ -515,7 +523,7 @@ async function renderDetail() {
   }
 
   detailContent.innerHTML = `
-    <div class="detail-category" id="detailCategoryChip">${t.category || 'Other'} ✎</div>
+    <div class="detail-category" id="detailCategoryChip">${escapeHtml(t.category || 'Other')} ✎</div>
     <div class="detail-fields">${fieldsHtml}</div>
     ${actionHtml}
   `;
@@ -571,8 +579,8 @@ async function renderDetail() {
         .map(
           (name) => `
         <div class="custom-share-row">
-          <span>${name}</span>
-          <input type="number" step="0.01" min="0" class="custom-share-input" data-name="${name}" value="${each}" />
+          <span>${escapeHtml(name)}</span>
+          <input type="number" step="0.01" min="0" class="custom-share-input" data-name="${escapeHtml(name)}" value="${each}" />
         </div>`
         )
         .join('');

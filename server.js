@@ -72,8 +72,10 @@ function serveStatic(req, res, urlPath) {
   const relative = urlPath === '/' ? '/index.html' : urlPath;
   const filePath = path.join(PUBLIC_DIR, relative);
 
-  // Prevent path traversal outside public/
-  if (!filePath.startsWith(PUBLIC_DIR)) {
+  // Prevent path traversal outside public/ — the trailing separator stops a
+  // sibling dir whose name happens to start with "public" (e.g. "public-evil")
+  // from passing a bare startsWith() prefix check.
+  if (!filePath.startsWith(PUBLIC_DIR + path.sep)) {
     res.writeHead(403);
     return res.end('Forbidden');
   }
