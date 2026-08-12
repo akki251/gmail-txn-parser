@@ -10,6 +10,30 @@ const { llmFallbackExtract } = require('./llmFallback');
 
 const PORT = 4173;
 const PUBLIC_DIR = path.join(__dirname, 'public');
+const DB_PATH = path.join(__dirname, 'db.json');
+const START_TIME = Date.now();
+
+// Cheap brute-force guard for the two unauthenticated endpoints
+// (/api/login and /api/sms-ingest — the only routes reachable without a
+// valid session or secret already). Fixed-window per-IP counter, reset
+// every minute; in-memory only is fine since a PM2 restart just resets
+// the window, and this is a single-user server, not a target worth a
+// distributed rate limiter.
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 20;
+const rateLimitHits = new Map(); // ip -> { count, windowStart }
+
+function isRateLimited(req) {
+  const ip = req.socket.remoteAddress || 'unknown';
+  const now = Date.now();
+  const entry = rateLimitHits.get(ip);
+  if (!entry || now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
+    rateLimitHits.set(ip, { count: 1, windowStart: now });
+    return false;
+  }
+  entry.count += 1;
+  return entry.count > RATE_LIMIT_MAX;
+}
 
 // Session auth — only meaningful when this server is reachable publicly
 // (behind Caddy/HTTPS on the cloud deployment). Sessions live in memory
@@ -131,6 +155,28 @@ async function handleSmsIngest(req, res) {
 
 async function handleApi(req, res, urlPath) {
   try {
+    // Unauthenticated (no session/PM2 auth) health probe — used by the
+    // GCP VM's monitoring loop, deliberately excluded from rate limiting
+    // and the auth gate below since it carries no user data.
+    if (req.method === 'GET' && urlPath === '/api/health') {
+      let dbOk = true;
+      try {
+        fs.accessSync(DB_PATH, fs.constants.R_OK);
+      } catch {
+        dbOk = false;
+      }
+      return sendJson(res, dbOk ? 200 : 503, {
+        ok: dbOk,
+        uptimeSec: Math.floor((Date.now() - START_TIME) / 1000),
+        dbReadable: dbOk,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (req.method === 'POST' && (urlPath === '/api/sms-ingest' || urlPath === '/api/login') && isRateLimited(req)) {
+      return sendJson(res, 429, { error: 'Too many requests, try again shortly' });
+    }
+
     if (req.method === 'POST' && urlPath === '/api/sms-ingest') {
       const expected = process.env.SMS_INGEST_SECRET || '';
       const given = req.headers['x-sms-secret'] || '';

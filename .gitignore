@@ -1,6 +1,7 @@
 node_modules/
 db.json
 db.json.bak
+backups/
 token.json
 credentials.json
 .DS_Store
