@@ -10,6 +10,12 @@ const fixtures = [
       'ICICI Bank Acct XX123 debited for Rs 1.00 on 05-Aug-26; JORDAN LEE credited. UPI:400000000004. Call 18002662 for dispute. SMS BLOCK 123 to 9999999999.',
   },
   {
+    label: 'ICICI — Prepaid Card debit',
+    sender: 'ICICIT-S',
+    text:
+      'Dear Customer, Rs 146.70 debited from ICICI Bank Prepaid Card 5278 on 11-Aug-26. Info- ZOMATO. The Available Balance is Rs 1,543.86 . Call 022 50405238 for dispute or SMS BLOCK 5278 to 9215676766',
+  },
+  {
     label: 'OneCard — credit card spend',
     sender: 'OneCrd-S',
     text: 'Rs. 189.01 sent from OneCard on 06 Aug 2026 to Dominospizza. Not you? Call on 18002109111 to report -OneCard',
