@@ -45,17 +45,16 @@ Proven and working end-to-end against real bank data:
 ```
 bankParsers.js       regex extraction per bank sender, pure functions, no I/O
 smsParsers.js          regex extraction per bank SMS sender, pure functions, no I/O
-merchantParsers.js      regex extraction for Swiggy/Zomato order emails
 categorize.js         deterministic merchant -> category keyword matcher
 llmFallback.js         Groq API call, used only when a known sender's regex misses
 db.js                  flat-JSON local store: transactions, friends, splits, ledger, dedupe, needs-review
 auth.js                 Google OAuth2 loopback flow for this script's own Gmail access
-fetchAndParse.js        Gmail -> bankParsers/merchantParsers -> db.js
+fetchAndParse.js        Gmail -> bankParsers -> db.js
 fetch-all.sh              thin wrapper (just fetchAndParse.js on this branch); used by launchd + the PWA's refresh button
 cli.js                    review/split/settle from the terminal
 server.js                  PWA backend: REST API + static file serving + POST /api/sms-ingest (SMS webhook)
 public/                     PWA frontend (vanilla JS, no build step, no framework)
-test.js / test-sms.js / test-merchant.js / test-split-flow.js   fixtures pulled from real messages + isolated db.js logic tests
+test.js / test-sms.js / test-split-flow.js   fixtures pulled from real messages + isolated db.js logic tests
 webhook.js                  sketch only, unused — future push-based path (Gmail watch + Pub/Sub) if polling ever feels slow
 README.md / LIVE_SETUP.md    human-facing docs
 ```

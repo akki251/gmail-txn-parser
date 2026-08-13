@@ -28,8 +28,6 @@ LLM call only for the rare message a regex can't parse).
   ingested via an iOS Shortcuts automation that POSTs the SMS to this
   server the instant it arrives (`POST /api/sms-ingest`). No Mac, no
   `chat.db`, nothing that needs to stay awake.
-- **Also parses Swiggy/Zomato order emails** (`merchantParsers.js`) to
-  power the "possibly shareable" suggestion heuristic.
 - **Never silently loses a transaction.** A message from a known sender
   whose exact template doesn't match falls back to an LLM extraction; if
   that also fails, it's stored flagged for review with the raw text
@@ -61,7 +59,6 @@ LLM call only for the rare message a regex can't parse).
 npm install
 npm test           # bank email parser fixtures, real excerpts, no network needed
 npm run test:sms   # SMS parser fixtures
-npm run test:merchant  # Swiggy/Zomato parser fixtures
 npm run test:split # split/ledger/dedupe logic, isolated from your real data
 ```
 
@@ -75,18 +72,17 @@ access via Tailscale.
 ```
 bankParsers.js       regex extraction per bank email sender, pure functions, no I/O
 smsParsers.js          regex extraction per bank SMS sender, pure functions, no I/O
-merchantParsers.js      regex extraction for Swiggy/Zomato order emails
 categorize.js         deterministic merchant -> category keyword matcher
 llmFallback.js         Groq API call, used only when a known sender's regex misses
 db.js                  flat-JSON local store: transactions, friends, splits, ledger, dedupe, needs-review
 auth.js                 Google OAuth2 loopback flow for this script's own Gmail access
-fetchAndParse.js        Gmail -> bankParsers/merchantParsers -> db.js
+fetchAndParse.js        Gmail -> bankParsers -> db.js
 fetch-all.sh              thin wrapper around fetchAndParse.js, used by the scheduler + the PWA's refresh button
 cli.js                    review/split/settle from the terminal
 server.js                  PWA backend: REST API + static file serving + POST /api/sms-ingest (SMS webhook)
 public/                     PWA frontend (vanilla JS, no build step, no framework)
 webhook.js                  sketch only, unused — future push-based Gmail path
-test.js / test-sms.js / test-merchant.js / test-split-flow.js   fixtures pulled from real messages + isolated db.js logic tests
+test.js / test-sms.js / test-split-flow.js   fixtures pulled from real messages + isolated db.js logic tests
 ```
 
 No build step, no bundler, no frontend framework, no ORM. Flat JSON file

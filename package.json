@@ -12,7 +12,6 @@
   "scripts": {
     "test": "node test.js",
     "test:split": "node test-split-flow.js",
-    "test:merchant": "node test-merchant.js",
     "test:sms": "node test-sms.js",
     "fetch": "node fetchAndParse.js",
     "cli": "node cli.js",

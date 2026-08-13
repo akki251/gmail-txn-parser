@@ -130,60 +130,21 @@ try {
   check('healed record clears needsReview and gets real fields', !healedTxn.needsReview && healedTxn.amount === 60);
   check('healed record now appears in unsplit list', db.listUnsplit().some((t) => t.id === 'review-1'));
 
-  // Cross-type dedupe: a Swiggy order email and the bank's own alert for
-  // the same order shouldn't both get stored. Order of arrival shouldn't
-  // matter, and the brand-mention check should prevent an unrelated
-  // same-amount/same-window transaction from false-matching.
-  db.upsertTransaction('swiggy-1', {
-    bank: 'Swiggy', sourceType: 'merchant', orderId: '999888777', amount: 340,
-    merchant: 'Test Kitchen', type: 'debit', status: 'Approved',
+  // Same-bank cross-source dedupe: a bank's email + SMS alert for the same
+  // payment shouldn't both get stored.
+  db.upsertTransaction('bank-email-1', {
+    bank: 'HDFC Bank', amount: 340, merchant: 'Some Cafe', type: 'debit', status: 'Approved',
   }, '2026-08-09T12:00:00Z');
 
-  const bankSideDup = db.upsertTransaction('bank-1', {
-    bank: 'HDFC Bank', amount: 340, merchant: 'SWIGGY PVT LTD FOOD2', type: 'debit', status: 'Approved',
-  }, '2026-08-09T12:01:30Z');
-  check('bank alert for the same Swiggy order (merchant-then-bank order) is deduped', bankSideDup === false);
+  const smsSideDup = db.upsertTransaction('bank-sms-1', {
+    bank: 'HDFC Bank', amount: 340, merchant: 'Some Cafe', type: 'debit', status: 'Approved',
+  }, '2026-08-09T12:01:30Z'); // 90s later, same bank/amount/type
+  check('SMS alert for the same payment already stored via email is deduped', smsSideDup === false);
 
-  db.upsertTransaction('bank-2', {
-    bank: 'ICICI Bank', amount: 500, merchant: 'SWIGGY FOOD', type: 'debit', status: 'Approved',
-  }, '2026-08-09T13:00:00Z');
-
-  const merchantSideDup = db.upsertTransaction('swiggy-2', {
-    bank: 'Swiggy', sourceType: 'merchant', orderId: '111222333', amount: 500,
-    merchant: 'Another Kitchen', type: 'debit', status: 'Approved',
-  }, '2026-08-09T13:00:45Z');
-  check('Swiggy order for the same payment (bank-then-merchant order) is deduped', merchantSideDup === false);
-
-  const unrelatedStandalone = db.upsertTransaction('bank-3', {
-    bank: 'Axis Bank', amount: 220, merchant: 'Some Store', type: 'debit', status: 'Approved',
-  }, '2026-08-09T14:00:00Z');
-  check('unrelated same-window bank transaction with no brand mention is NOT deduped', unrelatedStandalone === true);
-
-  const standaloneSwiggy = db.upsertTransaction('swiggy-3', {
-    bank: 'Swiggy', sourceType: 'merchant', orderId: '444555666', amount: 220,
-    merchant: 'Wallet-Paid Kitchen', type: 'debit', status: 'Approved',
-  }, '2026-08-09T14:00:20Z');
-  check('Swiggy order with no matching bank record (unrelated bank-side match rejected) stays standalone', standaloneSwiggy === true);
-
-  // Real-world-shaped gap: a delivery-notification email (e.g. "was
-  // delivered") arrives well after payment, unlike a real-time payment
-  // confirmation — verified live at ~21 minutes for a real order. The
-  // wider 45-minute cross-type window exists specifically for this.
-  db.upsertTransaction('bank-4', {
-    bank: 'HDFC Bank', amount: 300, merchant: 'SWIGGY FOOD', type: 'debit', status: 'Approved',
-  }, '2026-08-09T15:00:00Z');
-
-  const delayedMerchantDup = db.upsertTransaction('swiggy-4', {
-    bank: 'Swiggy', sourceType: 'merchant', orderId: '777888999', amount: 300,
-    merchant: 'Slow Delivery Kitchen', type: 'debit', status: 'Approved',
-  }, '2026-08-09T15:21:00Z'); // 21 min later
-  check('delivery-notification-shaped 21 min gap still dedupes (within the 45 min cross-type window)', delayedMerchantDup === false);
-
-  const tooLateMerchant = db.upsertTransaction('swiggy-5', {
-    bank: 'Swiggy', sourceType: 'merchant', orderId: '000111222', amount: 300,
-    merchant: 'Very Slow Kitchen', type: 'debit', status: 'Approved',
-  }, '2026-08-09T15:50:00Z'); // 50 min after bank-4 — beyond the 45 min cap
-  check('a gap beyond the 45 min cross-type window is NOT deduped', tooLateMerchant === true);
+  const differentBankSameAmount = db.upsertTransaction('bank-other-1', {
+    bank: 'Axis Bank', amount: 340, merchant: 'Unrelated Store', type: 'debit', status: 'Approved',
+  }, '2026-08-09T12:01:45Z');
+  check('same-amount transaction from a different bank is NOT deduped', differentBankSameAmount === true);
 
   console.log(`\n${failures === 0 ? 'All checks passed.' : failures + ' check(s) FAILED.'}`);
   cleanupAndExit(failures === 0 ? 0 : 1);
