@@ -199,12 +199,13 @@ async function handleApi(req, res, urlPath) {
 
     if (req.method === 'POST' && urlPath === '/api/sms-ingest') {
       const expected = process.env.SMS_INGEST_SECRET || '';
-      const given = req.headers['x-sms-secret'] || '';
-      const match =
-        expected.length > 0 &&
-        given.length === expected.length &&
-        crypto.timingSafeEqual(Buffer.from(given), Buffer.from(expected));
-      if (!match) return sendJson(res, 401, { error: 'Invalid or missing secret' });
+      if (expected.length > 0) {
+        const given = req.headers['x-sms-secret'] || '';
+        const match =
+          given.length === expected.length &&
+          crypto.timingSafeEqual(Buffer.from(given), Buffer.from(expected));
+        if (!match) return sendJson(res, 401, { error: 'Invalid or missing secret' });
+      }
       return handleSmsIngest(req, res);
     }
 
