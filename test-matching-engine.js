@@ -11,6 +11,7 @@ function txn(overrides) {
     date: '2026-08-14T10:30:00Z',
     refNo: null,
     last4: '1234',
+    sourceTypes: ['sms'], // by default, existing candidate arrived via SMS — source() defaults to 'email', so cross-channel by default
     ...overrides,
   };
 }
@@ -22,6 +23,7 @@ function source(overrides) {
     amount: 500,
     currency: 'INR',
     merchant: 'Swiggy',
+    sourceType: 'email',
     date: '2026-08-14T10:31:00Z',
     refNo: null,
     last4: '1234',
@@ -117,6 +119,27 @@ const cases = [
     candidates: [txn({ merchant: 'Uber' })],
     aiMatchFn: alwaysMatchAI,
     expect: { matched: false },
+  },
+  {
+    label: 'REAL DATA CASE: same-channel same-bank/amount/merchant a few minutes apart -> NOT merged (e.g. a declined card swipe retried shortly after)',
+    source: source({ sourceType: 'email', date: '2026-08-14T10:34:00Z' }), // 4 min after candidate
+    candidates: [txn({ sourceTypes: ['email'] })], // candidate ALSO arrived via email — same channel
+    aiMatchFn: alwaysMatchAI, // even if AI would say yes, same-channel exclusion should block it before AI is ever reached
+    expect: { matched: false },
+  },
+  {
+    label: 'cross-channel (SMS then email), same bank/amount/merchant, close time -> deterministic match (the actual intended case)',
+    source: source({ sourceType: 'email', date: '2026-08-14T10:33:00Z' }),
+    candidates: [txn({ sourceTypes: ['sms'] })],
+    aiMatchFn: null,
+    expect: { matched: true, method: 'deterministic' },
+  },
+  {
+    label: 'refNo match still wins even for same-channel sources (a redelivered duplicate email with an identical refNo really is the same message)',
+    source: source({ sourceType: 'email', refNo: 'UPI555' }),
+    candidates: [txn({ sourceTypes: ['email'], refNo: 'UPI555' })],
+    aiMatchFn: null,
+    expect: { matched: true, method: 'reference' },
   },
   {
     label: 'no candidates at all -> no match, no crash',

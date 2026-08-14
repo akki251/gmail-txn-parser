@@ -47,6 +47,19 @@ function passesHardFilters(source, candidate) {
   // reached.)
   if (source.refNo && candidate.refNo && source.refNo !== candidate.refNo) return false;
 
+  // The entire point of levels 2-3 is reconciling ONE real payment
+  // reported via TWO DIFFERENT channels (SMS + email) — not deduping two
+  // same-channel alerts. Two emails (or two SMS) with the same
+  // bank/amount/merchant a few minutes apart are very plausibly two
+  // genuinely separate real events: a declined card swipe retried
+  // shortly after, or two small manual transfers of the same round
+  // amount. Verified against real historical data: two such same-channel
+  // pairs existed (a declined ₹399 purchase retried ~4 min later; two ₹1
+  // test transfers ~5 min apart) and would have been incorrectly merged
+  // without this check. So: only allow levels 2-3 to consider a candidate
+  // that does NOT already have a source of this exact channel attached.
+  if (candidate.sourceTypes && candidate.sourceTypes.includes(source.sourceType)) return false;
+
   return (
     source.bank === candidate.bank &&
     source.type === candidate.type &&

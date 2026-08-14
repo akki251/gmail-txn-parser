@@ -100,9 +100,21 @@ async function upsertTransaction(messageId, parsed, date) {
       last4: parsed.last4 || null,
       account: parsed.account || null,
       date: date || null,
+      sourceType,
     };
 
-    const candidates = Object.values(db.transactions).filter((t) => !t.notATransaction && !t.needsReview);
+    // Each candidate needs to know which channel(s) already contributed to
+    // it, so the matching engine can refuse to match this source against
+    // a candidate that already has a source of the SAME channel (see the
+    // comment on this check in matchingEngine.js's passesHardFilters).
+    const candidates = Object.values(db.transactions)
+      .filter((t) => !t.notATransaction && !t.needsReview)
+      .map((t) => ({
+        ...t,
+        sourceTypes: (t.sourceIds || [t.id])
+          .map((sid) => db.sourceMessages[sid] && db.sourceMessages[sid].sourceType)
+          .filter(Boolean),
+      }));
     // AI arbitration only if a key is actually configured — matchSource
     // itself already only reaches this for the genuinely ambiguous score
     // band, so this isn't gating volume, just graceful degradation when
