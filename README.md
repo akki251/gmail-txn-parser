@@ -63,7 +63,7 @@ npm run test:split # split/ledger/dedupe logic, isolated from your real data
 ```
 
 Then walk through **[`LIVE_SETUP.md`](LIVE_SETUP.md)** for the real
-setup: your own Google Cloud OAuth credentials, a free Groq API key,
+setup: your own Google Cloud OAuth credentials, a free OpenRouter API key,
 the iOS Shortcut for SMS ingestion, background scheduling, and phone
 access via Tailscale.
 
@@ -73,7 +73,7 @@ access via Tailscale.
 bankParsers.js       regex extraction per bank email sender, pure functions, no I/O
 smsParsers.js          regex extraction per bank SMS sender, pure functions, no I/O
 categorize.js         deterministic merchant -> category keyword matcher
-llmFallback.js         Groq API call, used only when a known sender's regex misses
+llmFallback.js         OpenRouter API call, used only when a known sender's regex misses
 db.js                  flat-JSON local store: transactions, friends, splits, ledger, dedupe, needs-review
 auth.js                 Google OAuth2 loopback flow for this script's own Gmail access
 fetchAndParse.js        Gmail -> bankParsers -> db.js

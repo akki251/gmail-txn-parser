@@ -16,7 +16,7 @@ function cleanupAndExit(code) {
 }
 
 // Fake out the LLM call so retryNeedsReview tests are deterministic and
-// don't hit the real Groq API — swapped via Node's require cache, no
+// don't hit the real OpenRouter API — swapped via Node's require cache, no
 // mocking library needed, consistent with this file's zero-mocking style.
 let llmBehavior = null; // set per-test to a function(rawText) -> result or throw
 require.cache[require.resolve('./llmFallback')] = {

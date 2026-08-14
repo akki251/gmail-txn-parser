@@ -46,7 +46,7 @@ Proven and working end-to-end against real bank data:
 bankParsers.js       regex extraction per bank sender, pure functions, no I/O
 smsParsers.js          regex extraction per bank SMS sender, pure functions, no I/O
 categorize.js         deterministic merchant -> category keyword matcher
-llmFallback.js         Groq API call, used only when a known sender's regex misses
+llmFallback.js         OpenRouter API call, used only when a known sender's regex misses
 db.js                  flat-JSON local store: transactions, friends, splits, ledger, dedupe, needs-review
 auth.js                 Google OAuth2 loopback flow for this script's own Gmail access
 fetchAndParse.js        Gmail -> bankParsers -> db.js

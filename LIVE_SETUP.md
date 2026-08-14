@@ -48,22 +48,11 @@ you won't need to re-auth on future runs.
 Any known-bank-sender message that doesn't match the regex falls through
 to `llmFallback.js`, which needs:
 ```
-export GROQ_API_KEY=...
-```
-set in your shell before running. Get a free key from
-[console.groq.com](https://console.groq.com).
-
-Optionally, also set:
-```
 export OPENROUTER_API_KEY=...
 ```
-from [openrouter.ai](https://openrouter.ai) — if the Groq call fails for
-any reason (bad key, rate limit, outage), `llmFallback.js` retries once
-against OpenRouter before giving up, so a single provider's downtime
-doesn't push a real transaction into `needsReview`. Not required — if
-unset, a Groq failure just goes straight to `needsReview` as before.
-
-If a message fails *every* configured fallback, it's still not lost —
+set in your shell before running. Get a key from
+[openrouter.ai](https://openrouter.ai). If a message fails *both* the
+regex and the LLM fallback (e.g. quota, outage), it's still not lost —
 it's stored flagged `needsReview` with the raw text intact, visible in
 the PWA, and retried automatically on every future fetch.
 
@@ -89,7 +78,7 @@ SMS directly from your iPhone via a Shortcuts automation that POSTs the
 message to this server the moment it arrives — nothing to keep awake.
 
 1. Set a secret on the server (same `.env`/`ecosystem.config.js`/shell
-   export pattern as `GROQ_API_KEY`):
+   export pattern as `OPENROUTER_API_KEY`):
    ```
    export SMS_INGEST_SECRET=... # any long random string
    ```
@@ -123,7 +112,7 @@ Two `launchd` jobs — templates are in `launchd/` in this repo. Copy
 both into `~/Library/LaunchAgents/`, then in **each** file replace:
 - `/ABSOLUTE/PATH/TO/gmail-txn-parser` with this repo's actual path
 - `/ABSOLUTE/PATH/TO/HOME` with your home directory
-- `YOUR_GROQ_API_KEY` with your real key
+- `YOUR_OPENROUTER_API_KEY` with your real key
 - `com.example.` with something identifying yours (e.g. `com.yourname.`)
 
 ```
