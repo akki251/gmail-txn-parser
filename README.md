@@ -18,29 +18,30 @@ LLM call only for the rare message a regex can't parse).
 
 ## What it does
 
-- **Parses real bank emails** into structured transactions — amount,
+- **Parses real bank emails & SMS alerts** into structured transactions — amount,
   merchant, date, bank, category — via deterministic regex per bank
   template, not an LLM by default. Supports IndusInd, SBI Card, ICICI
-  (debit-card purchase + account credit), HDFC (credit card + two UPI
-  templates), and Axis Bank out of the box; adding your own bank is
+  (debit-card purchase, account credit, SMS alerts), HDFC (credit card + UPI
+  templates), OneCard, and Axis Bank out of the box; adding your own bank is
   straightforward (see `LIVE_SETUP.md`).
-- **Parses SMS-only bank alerts too**, for banks that never email —
-  ingested via an iOS Shortcuts automation that POSTs the SMS to this
-  server the instant it arrives (`POST /api/sms-ingest`). No Mac, no
-  `chat.db`, nothing that needs to stay awake.
-- **Never silently loses a transaction.** A message from a known sender
+- **Multi-Source Reconciliation & Anti-Deduplication**: Separates incoming source
+  messages (`sourceMessages`) from canonical transactions (`transactions`). Automatically
+  reconciles cross-channel alerts (e.g. an SMS and email for the same payment)
+  using a 4-level matching hierarchy (refNo exact match, tight deterministic window,
+  weighted similarity score, and LLM arbitration for ambiguous cases). Same-channel
+  alerts are guarded against accidental merging.
+- **Fast Pre-filtering**: Drops non-transactional noise (OTPs, bill-ready alerts,
+  login notifications) before parsing or calling any external APIs.
+- **Never silently loses a transaction**: A message from a known sender
   whose exact template doesn't match falls back to an LLM extraction; if
-  that also fails, it's stored flagged for review with the raw text
-  intact and retried automatically on every future fetch — never dropped.
-- **Categorizes spend** with an editable, deterministic keyword matcher
-  — no LLM call needed for this.
-- **Splits and settles** expenses with friends — even split or custom
-  per-friend amounts — tracks a running ledger.
-- **A PWA you install on your phone** — day-wise transaction list, spend
-  trend charts, a "possibly shareable" suggestion tab (transparent
-  category+amount heuristic, not a trained model), and a ledger view.
-  Reachable from your phone via [Tailscale](https://tailscale.com), no
-  public exposure.
+  that also fails, it's stored flagged for review with raw text intact and
+  retried automatically on subsequent fetches.
+- **Pipeline Stats & Unmatched Template Tracking**: Logs counters (processed,
+  filtered, regex, LLM fallback, review) and tracks unparsed message signatures
+  (`node cli.js unmatched-templates`) so recurring formats can easily be converted into regexes.
+- **Categorizes spend** with an editable, deterministic keyword matcher — no LLM call needed.
+- **Splits and settles** expenses with friends — even split or custom per-friend amounts — tracks a running ledger.
+- **Phone-installable PWA**: Day-wise transaction list, spend trend charts, a "possibly shareable" suggestion tab, and ledger view. Reachable via [Tailscale](https://tailscale.com).
 
 ## Screenshots
 
@@ -57,9 +58,13 @@ LLM call only for the rare message a regex can't parse).
 
 ```
 npm install
-npm test           # bank email parser fixtures, real excerpts, no network needed
-npm run test:sms   # SMS parser fixtures
-npm run test:split # split/ledger/dedupe logic, isolated from your real data
+npm test                     # bank email parser fixtures, real excerpts, no network needed
+npm run test:sms             # SMS parser fixtures
+npm run test:matching        # matching engine & similarity score test suite
+npm run test:nontransaction  # OTP & non-transactional filter test suite
+npm run test:pipeline-stats  # pipeline statistics & template signature tracking tests
+npm run test:dedup           # multi-source reconciliation integration tests
+npm run test:split           # split/ledger/dedupe logic, isolated from real data
 ```
 
 Then walk through **[`LIVE_SETUP.md`](LIVE_SETUP.md)** for the real
@@ -70,19 +75,24 @@ access via Tailscale.
 ## Architecture
 
 ```
-bankParsers.js       regex extraction per bank email sender, pure functions, no I/O
-smsParsers.js          regex extraction per bank SMS sender, pure functions, no I/O
-categorize.js         deterministic merchant -> category keyword matcher
-llmFallback.js         OpenRouter API call, used only when a known sender's regex misses
-db.js                  flat-JSON local store: transactions, friends, splits, ledger, dedupe, needs-review
-auth.js                 Google OAuth2 loopback flow for this script's own Gmail access
-fetchAndParse.js        Gmail -> bankParsers -> db.js
-fetch-all.sh              thin wrapper around fetchAndParse.js, used by the scheduler + the PWA's refresh button
-cli.js                    review/split/settle from the terminal
-server.js                  PWA backend: REST API + static file serving + POST /api/sms-ingest (SMS webhook)
-public/                     PWA frontend (vanilla JS, no build step, no framework)
-webhook.js                  sketch only, unused — future push-based Gmail path
-test.js / test-sms.js / test-split-flow.js   fixtures pulled from real messages + isolated db.js logic tests
+bankParsers.js              regex extraction per bank email sender, pure functions, no I/O
+smsParsers.js                 regex extraction per bank SMS sender, pure functions, no I/O
+bankSourceConfig.js           declares expected alert channels (email, SMS, or both) per bank
+nonTransactional.js           pre-filter for OTPs, app activation alerts, and non-transaction noise
+matchingEngine.js             4-level source reconciliation hierarchy (refNo, tight window, weighted score, LLM)
+merchantNormalize.js          merchant text normalization & string similarity scoring
+pipelineStats.js              pipeline instrumentation counters & redacted unmatched-template log
+categorize.js                deterministic merchant -> category keyword matcher
+llmFallback.js                OpenRouter API call for unmatched templates or ambiguous reconciliation
+db.js                         flat-JSON local store: transactions, sourceMessages, friends, splits, ledger
+auth.js                        Google OAuth2 loopback flow for Gmail API access
+fetchAndParse.js               Gmail -> bankParsers -> db.js
+fetch-all.sh                     thin wrapper around fetchAndParse.js, used by scheduler + PWA refresh
+cli.js                           review/split/settle + pipeline stats (`unmatched-templates`, `stats`)
+server.js                     PWA backend: REST API + health check (/api/health) + POST /api/sms-ingest
+migrate-source-messages.js    idempotent migration utility to upgrade pre-existing transactions to multi-source schema
+public/                        PWA frontend (vanilla JS, no build step, no framework)
+OPERATIONS.md                 ops runbook: health checks, PM2 process management, backups, VM deploys
 ```
 
 No build step, no bundler, no frontend framework, no ORM. Flat JSON file

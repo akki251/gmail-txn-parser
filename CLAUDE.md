@@ -24,38 +24,49 @@ Proven and working end-to-end against real bank data:
   ICICI (debit-card purchase + account credit), HDFC (credit card + two
   UPI templates), Axis Bank. Sender allowlist means non-bank mail (promo,
   tax refunds, payment-failed notices) is ignored by construction.
-- **Reliability**: a message from a known sender whose template doesn't
+- **SMS parsing** (`smsParsers.js` + `test-sms.js`): ICICI Bank (UPI debit + card debit)
+  and OneCard SMS parsing.
+- **Pre-filtering** (`nonTransactional.js`): drops OTPs, app activation alerts,
+  and login notifications before AI fallback, gated on absence of completion verbs.
+- **Multi-source reconciliation** (`matchingEngine.js` + `bankSourceConfig.js`):
+  4-level matching hierarchy (1: refNo exact match, 2: tight window deterministic,
+  3: weighted similarity score, 4: AI arbitration). Excludes same-channel auto-merging
+  at levels 2-3 to prevent false-positive merges.
+- **Reliability & LLM Fallback**: a message from a known sender whose template doesn't
   match any regex falls back to an LLM extraction (`llmFallback.js`)
   rather than being dropped. If *that* also fails, it's stored flagged
   `needsReview` (raw text preserved) instead of silently lost, and
   auto-retried on every subsequent fetch until it resolves.
+- **Pipeline stats & tracking** (`pipelineStats.js`): logs pipeline counters
+  and captures redacted signatures of unparsed message shapes (`node cli.js unmatched-templates`).
 - **Categorization** (`categorize.js`): deterministic keyword-based, not
   an LLM call — editable per-transaction if it guesses wrong.
-- **Storage + splitting** (`db.js`, `cli.js`): flat-JSON store, full
-  ingest → categorize → split (including custom per-friend amounts, not
-  just even-split) → settle loop.
-- **PWA** (`server.js` + `public/`): day-wise transaction list, Trends
-  (spend charts), a "possibly shareable" suggestion tab (transparent
-  category+amount heuristic, not a trained model), Ledger.
-- **Scheduling**: a `launchd` job polls Gmail on an interval; a second
-  runs the PWA server continuously. (`launchd` is macOS-specific — swap
-  for `cron`/`systemd` on Linux; see "Deploying to the cloud" below.)
+- **Storage + splitting** (`db.js`, `cli.js`): flat-JSON store supporting `sourceMessages`
+  and canonical `transactions`, full ingest → categorize → split → settle loop.
+- **PWA & Ops** (`server.js` + `public/` + `OPERATIONS.md`): day-wise transaction list,
+  Trends, Suggested splits, Ledger, `/api/health` health check endpoint, and PM2 deployment runbook.
 
 ## File map
 ```
-bankParsers.js       regex extraction per bank sender, pure functions, no I/O
-smsParsers.js          regex extraction per bank SMS sender, pure functions, no I/O
-categorize.js         deterministic merchant -> category keyword matcher
-llmFallback.js         OpenRouter API call, used only when a known sender's regex misses
-db.js                  flat-JSON local store: transactions, friends, splits, ledger, dedupe, needs-review
-auth.js                 Google OAuth2 loopback flow for this script's own Gmail access
-fetchAndParse.js        Gmail -> bankParsers -> db.js
-fetch-all.sh              thin wrapper (just fetchAndParse.js on this branch); used by launchd + the PWA's refresh button
-cli.js                    review/split/settle from the terminal
-server.js                  PWA backend: REST API + static file serving + POST /api/sms-ingest (SMS webhook)
-public/                     PWA frontend (vanilla JS, no build step, no framework)
-test.js / test-sms.js / test-split-flow.js   fixtures pulled from real messages + isolated db.js logic tests
-webhook.js                  sketch only, unused — future push-based path (Gmail watch + Pub/Sub) if polling ever feels slow
+bankParsers.js              regex extraction per bank email sender, pure functions, no I/O
+smsParsers.js                 regex extraction per bank SMS sender, pure functions, no I/O
+bankSourceConfig.js           declares expected alert channels (email, SMS, or both) per bank
+nonTransactional.js           pre-filter for OTPs, app activation alerts, and non-transaction noise
+matchingEngine.js             4-level source reconciliation hierarchy (refNo, tight window, weighted score, LLM)
+merchantNormalize.js          merchant text normalization & string similarity scoring
+pipelineStats.js              pipeline instrumentation counters & redacted unmatched-template log
+categorize.js                deterministic merchant -> category keyword matcher
+llmFallback.js                OpenRouter API call for unmatched templates or ambiguous reconciliation
+db.js                         flat-JSON local store: transactions, sourceMessages, friends, splits, ledger
+auth.js                        Google OAuth2 loopback flow for Gmail API access
+fetchAndParse.js               Gmail -> bankParsers -> db.js
+fetch-all.sh                     thin wrapper (just fetchAndParse.js on this branch); used by scheduler + PWA refresh
+cli.js                           review/split/settle + pipeline stats (`unmatched-templates`, `stats`)
+server.js                     PWA backend: REST API + health check (/api/health) + POST /api/sms-ingest
+migrate-source-messages.js    idempotent migration utility to upgrade pre-existing transactions to multi-source schema
+public/                        PWA frontend (vanilla JS, no build step, no framework)
+test.js / test-sms.js / ...   test suites for parsers, matching, filtering, stats, dedup, and splits
+OPERATIONS.md                 ops runbook: health checks, PM2 process management, backups, VM deploys
 README.md / LIVE_SETUP.md    human-facing docs
 ```
 
@@ -66,19 +77,23 @@ README.md / LIVE_SETUP.md    human-facing docs
 2. **Flat JSON file (`db.json`), not SQLite.** Personal-scale data, and
    this avoids a native-module compile step (`better-sqlite3` needs
    node-gyp) for zero benefit at this scale.
-3. **Idempotency via Gmail's `messageId`**, plus cross-source dedupe
-   in `db.js` in case any future source could double-report the same
-   transaction.
-4. **Parser flags `needsLLMFallback` instead of calling the LLM itself.**
+3. **Multi-source reconciliation via `matchingEngine.js`.** Incoming source
+   messages (`db.sourceMessages`) are stored individually and matched against
+   canonical transactions (`db.transactions`). Same-channel auto-merging at
+   levels 2-3 is blocked to prevent false-positive merges.
+4. **In-process write lock (`withWriteLock`) in `db.js`.** Serializes async
+   matching & database writes to prevent race conditions during concurrent ingestion
+   (e.g., SMS webhook firing during a Gmail poll).
+5. **Parser flags `needsLLMFallback` instead of calling the LLM itself.**
    Keeps `bankParsers.js` pure and synchronous — easy to unit test with
    zero mocking.
-5. **Never silently drop a transaction.** If even the LLM fallback fails,
+6. **Never silently drop a transaction.** If even the LLM fallback fails,
    it's stored as `needsReview` with the raw text intact, not discarded.
    Retried automatically on every future fetch.
-6. **Declined transactions and credits are excluded from the "unsplit"
+7. **Declined transactions and credits are excluded from the "unsplit"
    list** in `db.js`. No money left the account on a decline; a credit
    isn't a shared expense by default.
-7. **No new dependencies without a real reason.** The JSON-file store
+8. **No new dependencies without a real reason.** The JSON-file store
    and the plain `node:http` PWA server exist specifically to avoid
    native-compile dependencies and keep this forkable/deployable without
    a build step.
@@ -89,8 +104,10 @@ Transaction (as stored in `db.json`):
 { id, date, bank, instrument, last4|account, amount, currency,
   merchant, type: 'debit'|'credit', status, rawDate, category,
   splitStatus: 'unsplit'|'personal'|'split',
+  sourceIds: [...], sourcesMatched?: [{ sourceId, method, confidence, timestamp }],
   acknowledged?, needsReview?, rawText?, lastFailureReason? }
 ```
+SourceMessage: `{ id, sourceType: 'email'|'sms', rawText, parsed, canonicalTransactionId, createdAt }`
 Split: `{ id, transactionId, friendId, shareAmount, settled }`
 
 ## Non-negotiables
