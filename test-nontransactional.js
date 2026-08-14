@@ -26,6 +26,31 @@ const fixtures = [
     text: 'Rs 500.00 debited from ICICI Bank Debit Card 5278 on 11-Aug-26 at Merchant X. OTP verification required for this transaction.',
     expectFiltered: false,
   },
+  {
+    label: 'ICICI iMobile app activation — should be filtered (real message)',
+    text: 'iMobile Activation. Dear Customer, Greetings from ICICI Bank. You have successfully activated iMobile application on your registered mobile number XXXXXXX633 on Aug 04, 2026.',
+    expectFiltered: true,
+  },
+  {
+    label: 'SBI Card OTP quoting the pending amount — should be filtered (real message, amount present but no completion verb)',
+    text: 'Dear Cardholder, The One Time Password (OTP) for your transaction at Merchant X of INR 799.00 with your SBI Credit Card ending 4937 is 573032. This OTP is valid for 8 minutes or 1 successful attempt.',
+    expectFiltered: true,
+  },
+  {
+    label: 'SBI Card Touch ID login enabled — should be filtered (real message)',
+    text: 'Dear Customer, Touch ID based login has been enabled on your mobile phone iPhone on 09-08-2026. You can now login using your fingerprint based authentication.',
+    expectFiltered: true,
+  },
+  {
+    label: 'OneCard bill-ready reminder — should be filtered (real message, amount present but no completion verb)',
+    text: "Your Indian Bank One Credit Card bill of Rs. 3,948.68 is ready. Pay by 22 Aug, 2026 via the OneCard app.",
+    expectFiltered: true,
+  },
+  {
+    label: 'OneCard foreign-currency spend — should NOT be filtered (real transaction, has completion verb "spent")',
+    text: "That's a hit! SGD 1.38 spent at Merchant Y with your Indian Bank One Credit Card xxXX6566. Reward points added.",
+    expectFiltered: false,
+  },
 ];
 
 let pass = 0;
