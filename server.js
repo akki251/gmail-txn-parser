@@ -158,20 +158,19 @@ async function handleSmsIngest(req, res) {
     stats.recordEvent('aiFallbackCalled');
     stats.recordUnmatchedTemplate(result.sourceParser, result.rawText);
 
-    // Save initial needsReview record immediately so client never times out
-    await db.upsertTransaction(id, {
-      needsReview: true,
-      sourceParser: result.sourceParser,
-      rawText: result.rawText,
-      sender,
-    }, isoDate);
-
-    // Send HTTP 200 OK response immediately (prevents iOS Shortcut 10s HTTP timeout)
+    // Send HTTP 200 OK response IMMEDIATELY (prevents iOS Shortcut 10s HTTP timeout)
     sendJson(res, 200, { ok: true, stored: true, needsReview: true });
 
     // Asynchronously resolve LLM fallback in background
     (async () => {
       try {
+        await db.upsertTransaction(id, {
+          needsReview: true,
+          sourceParser: result.sourceParser,
+          rawText: result.rawText,
+          sender,
+        }, isoDate);
+
         const extracted = await llmFallbackExtract(result.rawText);
         stats.recordEvent('aiFallbackSuccess');
         if (!extracted.notATransaction) {
