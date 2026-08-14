@@ -135,10 +135,14 @@ function serveStatic(req, res, urlPath) {
 // forwarded, so retried/duplicate deliveries from the Shortcut are naturally
 // idempotent via db.js's existing dedupe-by-id check.
 async function handleSmsIngest(req, res) {
-  const { sender, text, date } = await readBody(req);
-  if (!sender || !text) return sendJson(res, 400, { error: 'sender and text are required' });
+  const body = await readBody(req);
+  const sender = body.sender || body.Sender || body.from || body.From || body.textSender || 'SMS';
+  const text = body.text || body.Text || body.content || body.Content || body.body || body.Body || body.message || body.Message || '';
+  const date = body.date || body.Date || body.time || body.Time || body.timestamp;
 
-  const isoDate = date ? new Date(date).toISOString() : new Date().toISOString();
+  if (!text) return sendJson(res, 400, { error: 'text payload is required' });
+
+  const isoDate = safeIsoDate(date);
   const id = crypto.createHash('sha1').update(`${sender}|${text}|${isoDate}`).digest('hex');
 
   stats.recordEvent('smsProcessed');
