@@ -12,6 +12,7 @@
  *    (bank changed their template) -> return { needsLLMFallback: true, rawText }
  *    so you fall back to an LLM call instead of silently dropping real money movement.
  */
+const { isNonTransactional } = require('./nonTransactional');
 
 function stripHtml(html) {
   return html
@@ -204,7 +205,20 @@ function parseTransactionEmail({ sender, htmlBody, plaintextBody }) {
 
   for (const parser of BANK_PARSERS) {
     if (parser.matchSender(sender)) {
-      const result = parser.parse(text);
+      // OTP/login/password-reset mail from a known bank sender — not a
+      // transaction, skip before wasting a parse attempt or an LLM call.
+      if (isNonTransactional(text)) return { notATransaction: true, sourceParser: parser.name };
+
+      // A thrown error (regex bug, unexpected input shape, etc.) is exactly
+      // the "silly parsing error" case that must still reach the LLM
+      // fallback, not crash and silently drop the message — same safety
+      // net as a clean `return null` regex miss.
+      let result;
+      try {
+        result = parser.parse(text);
+      } catch {
+        result = null;
+      }
       if (result) {
         return { ...result, sourceParser: parser.name, needsLLMFallback: false };
       }

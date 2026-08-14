@@ -51,10 +51,21 @@ to `llmFallback.js`, which needs:
 export GROQ_API_KEY=...
 ```
 set in your shell before running. Get a free key from
-[console.groq.com](https://console.groq.com). If a message fails
-*both* the regex and the LLM fallback (e.g. free-tier quota), it's still
-not lost — it's stored flagged `needsReview` with the raw text intact,
-visible in the PWA, and retried automatically on every future fetch.
+[console.groq.com](https://console.groq.com).
+
+Optionally, also set:
+```
+export OPENROUTER_API_KEY=...
+```
+from [openrouter.ai](https://openrouter.ai) — if the Groq call fails for
+any reason (bad key, rate limit, outage), `llmFallback.js` retries once
+against OpenRouter before giving up, so a single provider's downtime
+doesn't push a real transaction into `needsReview`. Not required — if
+unset, a Groq failure just goes straight to `needsReview` as before.
+
+If a message fails *every* configured fallback, it's still not lost —
+it's stored flagged `needsReview` with the raw text intact, visible in
+the PWA, and retried automatically on every future fetch.
 
 ## 4. Add your own bank(s)
 The parsers in this repo (`bankParsers.js`) were built from real messages

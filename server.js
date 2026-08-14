@@ -131,6 +131,7 @@ async function handleSmsIngest(req, res) {
 
   let result = parseTransactionSms({ sender, text });
   if (!result) return sendJson(res, 200, { ok: true, stored: false, reason: 'not a known SMS sender' });
+  if (result.notATransaction) return sendJson(res, 200, { ok: true, stored: false, reason: 'not a transaction' });
 
   if (result.needsLLMFallback) {
     try {

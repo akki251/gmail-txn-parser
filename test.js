@@ -69,6 +69,18 @@ const fixtures = [
     sender: 'intimations@cpc.incometax.gov.in',
     plaintextBody: 'Your Refund has been credited. Status: Your Refund has been...',
   },
+  {
+    label: 'SBI Card OTP email — should be SKIPPED (known sender, not a transaction)',
+    sender: 'onlinesbicard@sbicard.com',
+    plaintextBody:
+      'Untitled Document Dear Cardholder, One Time Password (OTP) for online registration of your SBI Card ending XX4937 is 460169 . This password is valid only for one transaction or for 30 mins whichever is earlier. Do not share it with anyone. Warm regards, SBI Card',
+  },
+  {
+    label: 'SBI Card login-alert email — should be SKIPPED (known sender, not a transaction)',
+    sender: 'onlinesbicard@sbicard.com',
+    plaintextBody:
+      'Dear AKSHANSH S, You have successfully logged in to your SBI Credit Card online account from iPhone 14 Plus on 09 Aug 2026 at 10:06PM. If you did not take this action, please call us on the Helpline number mentioned on the back of your SBI Credit Card.',
+  },
 ];
 
 let pass = 0;
@@ -79,6 +91,9 @@ for (const fx of fixtures) {
   if (fx.label.includes('IGNORED')) {
     if (result === null) pass++;
     else console.log('  ✗ expected null (ignored), got a result');
+  } else if (fx.label.includes('SKIPPED')) {
+    if (result && result.notATransaction === true) pass++;
+    else console.log('  ✗ expected notATransaction: true');
   } else {
     if (result && result.needsLLMFallback === false) pass++;
     else console.log('  ✗ expected a clean parse');

@@ -79,7 +79,7 @@ async function main() {
     const isoDate = msg.internalDate ? new Date(Number(msg.internalDate)).toISOString() : null;
 
     let result = parseTransactionEmail({ sender, htmlBody, plaintextBody });
-    if (!result) continue;
+    if (!result || result.notATransaction) continue;
 
     if (result.needsLLMFallback) {
       try {

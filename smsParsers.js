@@ -3,6 +3,7 @@
  * design as bankParsers.js — used for banks (ICICI) that only send UPI
  * alerts by SMS, never email.
  */
+const { isNonTransactional } = require('./nonTransactional');
 
 const SMS_PARSERS = [
   {
@@ -10,9 +11,10 @@ const SMS_PARSERS = [
     matchSender: (sender) => /ICICI/i.test(sender),
     parse: (text) => {
       // Case 1: UPI debit: "ICICI Bank Acct XX123 debited for Rs 1.00 on 05-Aug-26;
-      // JORDAN LEE credited. UPI:400000000004."
+      // JORDAN LEE credited. UPI:400000000004." — "for" is sometimes absent
+      // ("debited Rs 22500.00 on 14-Aug-26"), so it's optional here.
       let re =
-        /ICICI Bank Acct (XX\d+|\d+) debited for Rs\s?([\d,]+\.?\d*)\s+on\s+([\d]{1,2}-\w{3}-\d{2,4});\s*(.+?)\s+credited\.\s*UPI:(\d+)/i;
+        /ICICI Bank Acct (XX\d+|\d+) debited(?: for)? Rs\s?([\d,]+\.?\d*)\s+on\s+([\d]{1,2}-\w{3}-\d{2,4});\s*(.+?)\s+credited\.\s*UPI:(\d+)/i;
       let m = text.match(re);
       if (m) {
         return {
@@ -81,7 +83,20 @@ function parseTransactionSms({ sender, text }) {
 
   for (const parser of SMS_PARSERS) {
     if (parser.matchSender(sender)) {
-      const result = parser.parse(text);
+      // OTP/login/password-reset SMS from a known bank sender — not a
+      // transaction, skip before wasting a parse attempt or an LLM call.
+      if (isNonTransactional(text)) return { notATransaction: true, sourceParser: parser.name };
+
+      // A thrown error (regex bug, unexpected input shape, etc.) is exactly
+      // the "silly parsing error" case that must still reach the LLM
+      // fallback, not crash and silently drop the message — same safety
+      // net as a clean `return null` regex miss.
+      let result;
+      try {
+        result = parser.parse(text);
+      } catch {
+        result = null;
+      }
       if (result) {
         return { ...result, sourceParser: parser.name, needsLLMFallback: false };
       }
