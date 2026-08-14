@@ -127,6 +127,17 @@ function serveStatic(req, res, urlPath) {
   });
 }
 
+function safeIsoDate(dStr) {
+  if (!dStr) return new Date().toISOString();
+  try {
+    const parsed = new Date(dStr);
+    if (isNaN(parsed.getTime())) return new Date().toISOString();
+    return parsed.toISOString();
+  } catch {
+    return new Date().toISOString();
+  }
+}
+
 // Handles a single incoming SMS forwarded from the iOS Shortcuts automation
 // (see LIVE_SETUP.md) — same regex-first, LLM-fallback, needsReview-safety-net
 // pipeline as fetchAndParse.js/fetchSms.js, just triggered by a push instead
