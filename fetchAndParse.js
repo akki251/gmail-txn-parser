@@ -3,6 +3,7 @@ const { authorize } = require('./auth');
 const { parseTransactionEmail } = require('./bankParsers');
 const { llmFallbackExtract } = require('./llmFallback');
 const db = require('./db');
+const stats = require('./pipelineStats');
 
 // Add more as you find more banks — same allowlist principle as bankParsers.js
 const BANK_SENDERS = [
@@ -78,15 +79,26 @@ async function main() {
 
     const isoDate = msg.internalDate ? new Date(Number(msg.internalDate)).toISOString() : null;
 
+    stats.recordEvent('emailProcessed');
+
     let result = parseTransactionEmail({ sender, htmlBody, plaintextBody });
-    if (!result || result.notATransaction) continue;
+    if (!result) continue;
+    if (result.notATransaction) {
+      stats.recordEvent('filteredNotTransaction');
+      continue;
+    }
 
     if (result.needsLLMFallback) {
+      stats.recordEvent('aiFallbackCalled');
+      stats.recordUnmatchedTemplate(result.sourceParser, result.rawText);
       try {
         const extracted = await llmFallbackExtract(result.rawText);
+        stats.recordEvent('aiFallbackSuccess');
         if (extracted.notATransaction) continue;
         result = { ...extracted, sourceParser: result.sourceParser, needsLLMFallback: true };
       } catch (err) {
+        stats.recordEvent('aiFallbackFailure');
+        stats.recordEvent('needsReview');
         console.log(`  [LLM fallback failed for message ${ref.id}]: ${err.message} — flagged for review, not dropped`);
         db.upsertTransaction(ref.id, {
           needsReview: true,
@@ -97,6 +109,8 @@ async function main() {
         }, isoDate);
         continue;
       }
+    } else {
+      stats.recordEvent('deterministicMatch');
     }
 
     const inserted = db.upsertTransaction(ref.id, result, isoDate);
@@ -109,6 +123,15 @@ async function main() {
 
   console.log(`\nStored ${results.length} new transactions out of ${messages.length} candidate messages.`);
   console.log("Run `node cli.js unsplit` to see what's waiting to be split.");
+
+  const s = stats.getStats();
+  const processed = s.smsProcessed + s.emailProcessed;
+  const aiRate = processed > 0 ? ((s.aiFallbackCalled / processed) * 100).toFixed(1) : '0.0';
+  console.log(
+    `\nPipeline stats (all-time): ${processed} processed, ${s.deterministicMatch} deterministic, ` +
+    `${s.filteredNotTransaction} filtered (OTP/promo), ${s.aiFallbackCalled} AI calls (${aiRate}%), ` +
+    `${s.needsReview} needsReview. Run \`node cli.js unmatched-templates\` to see recurring formats worth a regex.`
+  );
 }
 
 main().catch((err) => {

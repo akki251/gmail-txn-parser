@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 const db = require('./db');
+const pipelineStats = require('./pipelineStats');
 
 const [, , command, ...args] = process.argv;
 
@@ -80,6 +81,36 @@ switch (command) {
     break;
   }
 
+  case 'stats': {
+    const s = pipelineStats.getStats();
+    const processed = s.smsProcessed + s.emailProcessed;
+    const pct = (n) => (processed > 0 ? ((n / processed) * 100).toFixed(1) : '0.0');
+    console.log(`SMS processed:              ${s.smsProcessed}`);
+    console.log(`Email processed:            ${s.emailProcessed}`);
+    console.log(`Filtered (OTP/promo):       ${s.filteredNotTransaction} (${pct(s.filteredNotTransaction)}%)`);
+    console.log(`Deterministic match:        ${s.deterministicMatch} (${pct(s.deterministicMatch)}%)`);
+    console.log(`AI fallback calls:          ${s.aiFallbackCalled} (${pct(s.aiFallbackCalled)}%)`);
+    console.log(`  - succeeded:              ${s.aiFallbackSuccess}`);
+    console.log(`  - failed:                 ${s.aiFallbackFailure}`);
+    console.log(`needsReview (all fallbacks failed): ${s.needsReview}`);
+    break;
+  }
+
+  case 'unmatched-templates': {
+    const s = pipelineStats.getStats();
+    const entries = Object.entries(s.unmatchedTemplates).sort((a, b) => b[1].count - a[1].count);
+    if (entries.length === 0) {
+      console.log('No unmatched templates recorded — every AI fallback call so far has been a one-off format.');
+      break;
+    }
+    console.log('Recurring formats that hit the AI fallback — a high count means it\'s worth writing a real regex + fixture for:\n');
+    for (const [key, info] of entries) {
+      console.log(`[${info.count}x] ${info.sourceParser}`);
+      console.log(`  ${info.sample}\n`);
+    }
+    break;
+  }
+
   default:
     console.log(`Usage:
   node cli.js unsplit                          list transactions waiting to be split
@@ -87,5 +118,7 @@ switch (command) {
   node cli.js personal <id>                    mark a transaction as not-to-split
   node cli.js ledger                           show who owes you what
   node cli.js settle <friend> [amount]         mark a friend's balance paid (full, or partial if amount given)
-  node cli.js friends                          list known friends`);
+  node cli.js friends                          list known friends
+  node cli.js stats                            show parse-pipeline stats (deterministic vs AI-fallback rate)
+  node cli.js unmatched-templates               show recurring SMS/email formats still hitting the AI fallback`);
 }

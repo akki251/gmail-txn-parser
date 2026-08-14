@@ -18,3 +18,5 @@ jobs:
       - run: npm test
       - run: npm run test:split
       - run: npm run test:sms
+      - run: npm run test:nontransactional
+      - run: npm run test:stats

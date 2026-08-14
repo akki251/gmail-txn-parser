@@ -13,6 +13,8 @@
     "test": "node test.js",
     "test:split": "node test-split-flow.js",
     "test:sms": "node test-sms.js",
+    "test:nontransactional": "node test-nontransactional.js",
+    "test:stats": "node test-pipeline-stats.js",
     "fetch": "node fetchAndParse.js",
     "cli": "node cli.js",
     "serve": "node server.js"

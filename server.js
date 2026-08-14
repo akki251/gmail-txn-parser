@@ -7,6 +7,7 @@ const db = require('./db');
 const { CATEGORIES } = require('./categorize');
 const { parseTransactionSms } = require('./smsParsers');
 const { llmFallbackExtract } = require('./llmFallback');
+const stats = require('./pipelineStats');
 
 const PORT = 4173;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -129,16 +130,26 @@ async function handleSmsIngest(req, res) {
   const isoDate = date ? new Date(date).toISOString() : new Date().toISOString();
   const id = crypto.createHash('sha1').update(`${sender}|${text}|${isoDate}`).digest('hex');
 
+  stats.recordEvent('smsProcessed');
+
   let result = parseTransactionSms({ sender, text });
   if (!result) return sendJson(res, 200, { ok: true, stored: false, reason: 'not a known SMS sender' });
-  if (result.notATransaction) return sendJson(res, 200, { ok: true, stored: false, reason: 'not a transaction' });
+  if (result.notATransaction) {
+    stats.recordEvent('filteredNotTransaction');
+    return sendJson(res, 200, { ok: true, stored: false, reason: 'not a transaction' });
+  }
 
   if (result.needsLLMFallback) {
+    stats.recordEvent('aiFallbackCalled');
+    stats.recordUnmatchedTemplate(result.sourceParser, result.rawText);
     try {
       const extracted = await llmFallbackExtract(result.rawText);
+      stats.recordEvent('aiFallbackSuccess');
       if (extracted.notATransaction) return sendJson(res, 200, { ok: true, stored: false, reason: 'not a transaction' });
       result = { ...extracted, sourceParser: result.sourceParser, needsLLMFallback: true };
     } catch (err) {
+      stats.recordEvent('aiFallbackFailure');
+      stats.recordEvent('needsReview');
       db.upsertTransaction(id, {
         needsReview: true,
         sourceParser: result.sourceParser,
@@ -148,6 +159,8 @@ async function handleSmsIngest(req, res) {
       }, isoDate);
       return sendJson(res, 200, { ok: true, stored: true, needsReview: true });
     }
+  } else {
+    stats.recordEvent('deterministicMatch');
   }
 
   const inserted = db.upsertTransaction(id, result, isoDate);
