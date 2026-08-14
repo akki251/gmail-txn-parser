@@ -184,12 +184,17 @@ async function handleSmsIngest(req, res) {
       }
     })();
     return;
-  } else {
-    stats.recordEvent('deterministicMatch');
-  }
+  stats.recordEvent('deterministicMatch');
+  sendJson(res, 200, { ok: true, stored: true });
 
-  const inserted = await db.upsertTransaction(id, result, isoDate);
-  return sendJson(res, 200, { ok: true, stored: inserted });
+  (async () => {
+    try {
+      await db.upsertTransaction(id, result, isoDate);
+    } catch (err) {
+      console.error('[SMS Ingest DB Error]:', err);
+    }
+  })();
+  return;
 }
 
 async function handleApi(req, res, urlPath) {
