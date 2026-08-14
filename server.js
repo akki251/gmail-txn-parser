@@ -157,23 +157,33 @@ async function handleSmsIngest(req, res) {
   if (result.needsLLMFallback) {
     stats.recordEvent('aiFallbackCalled');
     stats.recordUnmatchedTemplate(result.sourceParser, result.rawText);
-    try {
-      const extracted = await llmFallbackExtract(result.rawText);
-      stats.recordEvent('aiFallbackSuccess');
-      if (extracted.notATransaction) return sendJson(res, 200, { ok: true, stored: false, reason: 'not a transaction' });
-      result = { ...extracted, sourceParser: result.sourceParser, needsLLMFallback: true };
-    } catch (err) {
-      stats.recordEvent('aiFallbackFailure');
-      stats.recordEvent('needsReview');
-      await db.upsertTransaction(id, {
-        needsReview: true,
-        sourceParser: result.sourceParser,
-        rawText: result.rawText,
-        sender,
-        lastFailureReason: err.message,
-      }, isoDate);
-      return sendJson(res, 200, { ok: true, stored: true, needsReview: true });
-    }
+
+    // Save initial needsReview record immediately so client never times out
+    await db.upsertTransaction(id, {
+      needsReview: true,
+      sourceParser: result.sourceParser,
+      rawText: result.rawText,
+      sender,
+    }, isoDate);
+
+    // Send HTTP 200 OK response immediately (prevents iOS Shortcut 10s HTTP timeout)
+    sendJson(res, 200, { ok: true, stored: true, needsReview: true });
+
+    // Asynchronously resolve LLM fallback in background
+    (async () => {
+      try {
+        const extracted = await llmFallbackExtract(result.rawText);
+        stats.recordEvent('aiFallbackSuccess');
+        if (!extracted.notATransaction) {
+          const resolved = { ...extracted, sourceParser: result.sourceParser, needsLLMFallback: true };
+          await db.upsertTransaction(id, resolved, isoDate);
+        }
+      } catch (err) {
+        stats.recordEvent('aiFallbackFailure');
+        stats.recordEvent('needsReview');
+      }
+    })();
+    return;
   } else {
     stats.recordEvent('deterministicMatch');
   }
