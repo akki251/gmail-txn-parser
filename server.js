@@ -150,7 +150,7 @@ async function handleSmsIngest(req, res) {
     } catch (err) {
       stats.recordEvent('aiFallbackFailure');
       stats.recordEvent('needsReview');
-      db.upsertTransaction(id, {
+      await db.upsertTransaction(id, {
         needsReview: true,
         sourceParser: result.sourceParser,
         rawText: result.rawText,
@@ -163,7 +163,7 @@ async function handleSmsIngest(req, res) {
     stats.recordEvent('deterministicMatch');
   }
 
-  const inserted = db.upsertTransaction(id, result, isoDate);
+  const inserted = await db.upsertTransaction(id, result, isoDate);
   return sendJson(res, 200, { ok: true, stored: inserted });
 }
 

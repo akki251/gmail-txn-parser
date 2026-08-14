@@ -1,73 +1,153 @@
 const fs = require('fs');
 const path = require('path');
 const { categorize, CATEGORIES } = require('./categorize');
-const { llmFallbackExtract } = require('./llmFallback');
+const { llmFallbackExtract, llmMatchTransactions } = require('./llmFallback');
+const { matchSource } = require('./matchingEngine');
+const stats = require('./pipelineStats');
 
 const DB_PATH = path.join(__dirname, 'db.json');
 
 function load() {
   if (!fs.existsSync(DB_PATH)) {
-    return { transactions: {}, friends: {}, splits: [], nextFriendId: 1, nextSplitId: 1 };
+    return { transactions: {}, sourceMessages: {}, friends: {}, splits: [], nextFriendId: 1, nextSplitId: 1 };
   }
-  return JSON.parse(fs.readFileSync(DB_PATH, 'utf-8'));
+  const db = JSON.parse(fs.readFileSync(DB_PATH, 'utf-8'));
+  if (!db.sourceMessages) db.sourceMessages = {}; // pre-migration db.json — see migrate-source-messages.js
+  return db;
 }
 
 function save(db) {
   fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
 }
 
-// ---- transactions ----
-
-// Same real-world transaction can arrive via two channels (e.g. a bank's
-// email + SMS alert for the same payment) with different message IDs, so
-// messageId-based idempotency alone won't catch it. refNo (a UPI reference
-// number) is shared across every bank channel for the same transaction, so
-// it's checked first as a strong signal; same bank/amount/type within a
-// short window is a weaker fallback for when refNo isn't available on one
-// side.
-const CROSS_SOURCE_WINDOW_MS = 5 * 60 * 1000;
-
-function findCrossSourceDuplicate(db, parsed, isoDate) {
-  const candidates = Object.values(db.transactions);
-
-  if (parsed.refNo) {
-    const byRef = candidates.find((t) => t.refNo && t.refNo === parsed.refNo);
-    if (byRef) return byRef;
-  }
-
-  if (isoDate && typeof parsed.amount === 'number') {
-    const targetMs = new Date(isoDate).getTime();
-    const byAmountAndTime = candidates.find((t) => {
-      if (t.type !== parsed.type || t.amount !== parsed.amount || t.bank !== parsed.bank) return false;
-      if (!t.date) return false;
-      const gapMs = Math.abs(new Date(t.date).getTime() - targetMs);
-      return gapMs <= CROSS_SOURCE_WINDOW_MS;
-    });
-    if (byAmountAndTime) return byAmountAndTime;
-  }
-
-  return null;
+// Every SMS/email is a source message from a known bank sender (`sourceParser`
+// values from bankParsers.js all read e.g. "ICICI Bank" for email; from
+// smsParsers.js they read e.g. "ICICI Bank SMS" — the " SMS" suffix is the
+// one place that distinction is encoded today, so it's the cheapest correct
+// signal rather than adding a new parameter through every call site).
+function inferSourceType(sourceParser) {
+  return /\sSMS$/.test(sourceParser || '') ? 'sms' : 'email';
 }
 
-// Returns true if newly inserted, false if this messageId was already ingested
-// (idempotency — same guarantee webhook.js relies on for push redelivery) OR
-// it's a cross-source duplicate of a transaction already stored (e.g. the
-// same payment alerted by both email and SMS) — either way, nothing new to
-// insert.
-function upsertTransaction(messageId, parsed, date) {
-  const db = load();
-  if (db.transactions[messageId]) return false;
-  if (findCrossSourceDuplicate(db, parsed, date)) return false;
+// A minimal in-process write lock: db.json is a single file with no
+// database-level transaction support, and `upsertTransaction` now does an
+// async matching step (possibly an AI call) between its read and its
+// write. Without this, two concurrent ingests (e.g. the SMS webhook firing
+// while a Gmail fetch is mid-run) could both load() the same starting
+// state and the second save() would silently clobber the first. Chaining
+// every ingest through one promise queue serializes them within this
+// process — enough for a single-instance personal server; genuine
+// multi-process/multi-machine concurrency would need a real database, out
+// of scope for this file format.
+let writeChain = Promise.resolve();
+function withWriteLock(fn) {
+  const run = writeChain.then(fn, fn);
+  writeChain = run.then(
+    () => {},
+    () => {}
+  );
+  return run;
+}
 
-  db.transactions[messageId] = {
-    id: messageId,
-    date: date || null,
-    ...parsed,
-    category: categorize(parsed.merchant, parsed.bank),
-    splitStatus: 'unsplit',
-  };
-  save(db);
-  return true;
+// ---- transactions ----
+
+// Returns true if a NEW canonical transaction was created, false if this
+// source message was either (a) already ingested before (idempotent
+// retry — matches webhook.js's push-redelivery guarantee) or (b) matched
+// to an existing canonical transaction and attached as an additional
+// source (e.g. the same payment's SMS arriving after its email already
+// created the transaction, or vice versa — order-independent). Either way
+// "false" means: nothing new for the caller to report.
+async function upsertTransaction(messageId, parsed, date) {
+  return withWriteLock(async () => {
+    const db = load();
+    if (db.sourceMessages[messageId]) return false; // idempotent retry, same source message
+
+    const sourceType = inferSourceType(parsed.sourceParser);
+
+    // A needsReview placeholder has no structured fields to match against
+    // yet — store it as its own transaction (as before) and let
+    // retryNeedsReview's later heal fold it into normal flow.
+    if (parsed.needsReview) {
+      db.sourceMessages[messageId] = {
+        id: messageId,
+        sourceType,
+        bank: null,
+        receivedAt: date || null,
+        matchedTransactionId: null,
+        matchMethod: null,
+        matchConfidence: null,
+      };
+      db.transactions[messageId] = {
+        id: messageId,
+        date: date || null,
+        ...parsed,
+        category: categorize(parsed.merchant, parsed.bank),
+        splitStatus: 'unsplit',
+        sourceIds: [messageId],
+      };
+      save(db);
+      return true;
+    }
+
+    const sourceRecord = {
+      bank: parsed.bank || null,
+      type: parsed.type,
+      amount: parsed.amount,
+      currency: parsed.currency,
+      merchant: parsed.merchant || null,
+      refNo: parsed.refNo || null,
+      last4: parsed.last4 || null,
+      account: parsed.account || null,
+      date: date || null,
+    };
+
+    const candidates = Object.values(db.transactions).filter((t) => !t.notATransaction && !t.needsReview);
+    // AI arbitration only if a key is actually configured — matchSource
+    // itself already only reaches this for the genuinely ambiguous score
+    // band, so this isn't gating volume, just graceful degradation when
+    // no key is set (falls back to "no match", never a crash).
+    const aiMatchFn = process.env.OPENROUTER_API_KEY ? llmMatchTransactions : null;
+    const matchResult = await matchSource(sourceRecord, candidates, aiMatchFn);
+
+    db.sourceMessages[messageId] = {
+      id: messageId,
+      sourceType,
+      bank: parsed.bank || null,
+      receivedAt: date || null,
+      matchedTransactionId: matchResult ? matchResult.matchedTransaction.id : null,
+      matchMethod: matchResult ? matchResult.method : null,
+      matchConfidence: matchResult ? matchResult.confidence : null,
+    };
+
+    stats.recordEvent('matchAttempts');
+    if (matchResult) {
+      const eventByMethod = {
+        reference: 'matchedByReference',
+        deterministic: 'matchedByDeterministic',
+        score: 'matchedByScore',
+        ai: 'matchedByAI',
+      };
+      stats.recordEvent(eventByMethod[matchResult.method]);
+
+      const target = db.transactions[matchResult.matchedTransaction.id];
+      target.sourceIds = [...(target.sourceIds || [target.id]), messageId];
+      save(db);
+      return false;
+    }
+
+    stats.recordEvent('unmatchedNew');
+    db.transactions[messageId] = {
+      id: messageId,
+      date: date || null,
+      ...parsed,
+      category: categorize(parsed.merchant, parsed.bank),
+      splitStatus: 'unsplit',
+      sourceIds: [messageId],
+    };
+    save(db);
+    return true;
+  });
 }
 
 function setAcknowledged(id, acknowledged) {
@@ -96,7 +176,20 @@ function getTransaction(id) {
       shareAmount: s.shareAmount,
       settled: s.settled,
     }));
-  return { ...txn, splits };
+  // Resolved source messages this canonical transaction was built from —
+  // observability into why/how a match happened (match_method + confidence
+  // per source), without exposing raw SMS/email text by default.
+  const sources = (txn.sourceIds || [id])
+    .map((sourceId) => db.sourceMessages[sourceId])
+    .filter(Boolean)
+    .map((s) => ({
+      id: s.id,
+      sourceType: s.sourceType,
+      receivedAt: s.receivedAt,
+      matchMethod: s.matchMethod,
+      matchConfidence: s.matchConfidence,
+    }));
+  return { ...txn, splits, sources };
 }
 
 function listAll() {

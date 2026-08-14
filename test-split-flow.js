@@ -6,24 +6,44 @@ const fs = require('fs');
 const path = require('path');
 
 const REAL_DB_PATH = path.join(__dirname, 'db.json');
-const BACKUP_PATH = path.join(__dirname, 'db.json.bak');
-if (fs.existsSync(REAL_DB_PATH)) fs.renameSync(REAL_DB_PATH, BACKUP_PATH);
+const BACKUP_DB_PATH = path.join(__dirname, 'db.json.bak');
+if (fs.existsSync(REAL_DB_PATH)) fs.renameSync(REAL_DB_PATH, BACKUP_DB_PATH);
+
+// db.js also writes pipelineStats.json as a side effect of every ingest —
+// protect the real one the same way, so running this test never pollutes
+// real operational metrics.
+const REAL_STATS_PATH = path.join(__dirname, 'pipelineStats.json');
+const BACKUP_STATS_PATH = path.join(__dirname, 'pipelineStats.json.bak');
+if (fs.existsSync(REAL_STATS_PATH)) fs.renameSync(REAL_STATS_PATH, BACKUP_STATS_PATH);
 
 function cleanupAndExit(code) {
   if (fs.existsSync(REAL_DB_PATH)) fs.unlinkSync(REAL_DB_PATH);
-  if (fs.existsSync(BACKUP_PATH)) fs.renameSync(BACKUP_PATH, REAL_DB_PATH);
+  if (fs.existsSync(BACKUP_DB_PATH)) fs.renameSync(BACKUP_DB_PATH, REAL_DB_PATH);
+  if (fs.existsSync(REAL_STATS_PATH)) fs.unlinkSync(REAL_STATS_PATH);
+  if (fs.existsSync(BACKUP_STATS_PATH)) fs.renameSync(BACKUP_STATS_PATH, REAL_STATS_PATH);
   process.exit(code);
 }
 
-// Fake out the LLM call so retryNeedsReview tests are deterministic and
-// don't hit the real OpenRouter API — swapped via Node's require cache, no
-// mocking library needed, consistent with this file's zero-mocking style.
+// Deterministic regardless of the shell's real environment — the matching
+// engine's Level 4 (AI) is gated on OPENROUTER_API_KEY being set, so fix
+// it to a known test value rather than depending on whatever happens (or
+// doesn't) to be exported in the environment this test runs in.
+process.env.OPENROUTER_API_KEY = 'test-key-not-real';
+
+// Fake out both LLM calls so tests are deterministic and don't hit the
+// real OpenRouter API — swapped via Node's require cache, no mocking
+// library needed, consistent with this file's zero-mocking style.
 let llmBehavior = null; // set per-test to a function(rawText) -> result or throw
+let aiMatchBehavior = null; // set per-test to a function(source, candidate) -> {isMatch, confidence}; defaults to "not a match" so ambiguous-band tests stay deterministic unless a test opts in
 require.cache[require.resolve('./llmFallback')] = {
   exports: {
     llmFallbackExtract: async (rawText) => {
       if (!llmBehavior) throw new Error('llmBehavior not set for this test');
       return llmBehavior(rawText);
+    },
+    llmMatchTransactions: async (source, candidate) => {
+      if (aiMatchBehavior) return aiMatchBehavior(source, candidate);
+      return { isMatch: false, confidence: 0 };
     },
   },
 };
@@ -37,15 +57,15 @@ try {
     if (!cond) failures++;
   }
 
-  db.upsertTransaction('msg1', {
+  await db.upsertTransaction('msg1', {
     bank: 'SBI Card', amount: 1200, merchant: 'Toit Brewpub', type: 'debit', status: 'Approved', rawDate: '01-08-26',
   }, '2026-08-01T18:00:00Z');
 
-  db.upsertTransaction('msg2', {
+  await db.upsertTransaction('msg2', {
     bank: 'ICICI Bank', amount: 850, merchant: null, type: 'credit', status: 'Approved', rawDate: '02-08-26',
   }, '2026-08-02T09:00:00Z');
 
-  const reInserted = db.upsertTransaction('msg1', { amount: 1200 }, '2026-08-01T18:00:00Z');
+  const reInserted = await db.upsertTransaction('msg1', { amount: 1200 }, '2026-08-01T18:00:00Z');
   check('duplicate messageId is ignored (idempotent)', reInserted === false);
 
   let unsplit = db.listUnsplit();
@@ -72,26 +92,26 @@ try {
 
   // Cross-source dedupe: same real payment can arrive via two channels
   // (e.g. bank email + bank SMS) with different message IDs.
-  db.upsertTransaction('email-1', {
+  await db.upsertTransaction('email-1', {
     bank: 'ICICI Bank', amount: 250, type: 'debit', status: 'Approved', refNo: 'UPI999',
   }, '2026-08-05T10:00:00Z');
 
-  const smsRefDup = db.upsertTransaction('sms-1', {
+  const smsRefDup = await db.upsertTransaction('sms-1', {
     bank: 'ICICI Bank', amount: 250, type: 'debit', status: 'Approved', refNo: 'UPI999',
   }, '2026-08-05T10:00:15Z');
   check('same refNo across sources is treated as duplicate (not inserted)', smsRefDup === false);
 
-  const smsTimeDup = db.upsertTransaction('sms-2', {
+  const smsTimeDup = await db.upsertTransaction('sms-2', {
     bank: 'ICICI Bank', amount: 250, type: 'debit', status: 'Approved',
   }, '2026-08-05T10:02:00Z');
   check('same bank/amount/type within 5 min (no refNo) is treated as duplicate', smsTimeDup === false);
 
-  const genuinelyDifferent = db.upsertTransaction('sms-3', {
+  const genuinelyDifferent = await db.upsertTransaction('sms-3', {
     bank: 'ICICI Bank', amount: 250, type: 'debit', status: 'Approved',
   }, '2026-08-05T10:20:00Z');
   check('same bank/amount but 20 min later is NOT a duplicate', genuinelyDifferent === true);
 
-  const differentAmount = db.upsertTransaction('sms-4', {
+  const differentAmount = await db.upsertTransaction('sms-4', {
     bank: 'ICICI Bank', amount: 99, type: 'debit', status: 'Approved',
   }, '2026-08-05T10:00:30Z');
   check('same time window but different amount is NOT a duplicate', differentAmount === true);
@@ -99,7 +119,7 @@ try {
   // Needs-review: a message from a known sender whose regex + LLM fallback
   // both failed shouldn't vanish — it's stored flagged, excluded from
   // splitting, and can heal later via retryNeedsReview.
-  db.upsertTransaction('review-1', {
+  await db.upsertTransaction('review-1', {
     needsReview: true, sourceParser: 'ICICI Bank SMS', rawText: 'garbled sms text',
     sender: 'ICICIT-S', lastFailureReason: 'quota exceeded',
   }, '2026-08-05T11:00:00Z');
@@ -132,16 +152,16 @@ try {
 
   // Same-bank cross-source dedupe: a bank's email + SMS alert for the same
   // payment shouldn't both get stored.
-  db.upsertTransaction('bank-email-1', {
+  await db.upsertTransaction('bank-email-1', {
     bank: 'HDFC Bank', amount: 340, merchant: 'Some Cafe', type: 'debit', status: 'Approved',
   }, '2026-08-09T12:00:00Z');
 
-  const smsSideDup = db.upsertTransaction('bank-sms-1', {
+  const smsSideDup = await db.upsertTransaction('bank-sms-1', {
     bank: 'HDFC Bank', amount: 340, merchant: 'Some Cafe', type: 'debit', status: 'Approved',
   }, '2026-08-09T12:01:30Z'); // 90s later, same bank/amount/type
   check('SMS alert for the same payment already stored via email is deduped', smsSideDup === false);
 
-  const differentBankSameAmount = db.upsertTransaction('bank-other-1', {
+  const differentBankSameAmount = await db.upsertTransaction('bank-other-1', {
     bank: 'Axis Bank', amount: 340, merchant: 'Unrelated Store', type: 'debit', status: 'Approved',
   }, '2026-08-09T12:01:45Z');
   check('same-amount transaction from a different bank is NOT deduped', differentBankSameAmount === true);

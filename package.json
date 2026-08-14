@@ -15,6 +15,8 @@
     "test:sms": "node test-sms.js",
     "test:nontransactional": "node test-nontransactional.js",
     "test:stats": "node test-pipeline-stats.js",
+    "test:matching": "node test-matching-engine.js",
+    "test:dedup": "node test-dedup-integration.js",
     "fetch": "node fetchAndParse.js",
     "cli": "node cli.js",
     "serve": "node server.js"

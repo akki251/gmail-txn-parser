@@ -23,17 +23,28 @@ const EMPTY_STATS = {
   smsProcessed: 0,
   emailProcessed: 0,
   filteredNotTransaction: 0,
-  deterministicMatch: 0,
+  deterministicMatch: 0, // field-extraction: regex parsed cleanly, no AI needed
   aiFallbackCalled: 0,
   aiFallbackSuccess: 0,
   aiFallbackFailure: 0,
   needsReview: 0,
+  // Cross-source dedup/matching (source message -> canonical transaction),
+  // distinct from the field-extraction stats above.
+  matchAttempts: 0,
+  matchedByReference: 0,
+  matchedByDeterministic: 0,
+  matchedByScore: 0,
+  matchedByAI: 0,
+  unmatchedNew: 0, // no match found -> became its own new canonical transaction
   unmatchedTemplates: {}, // signature -> { count, sourceParser, sample }
 };
 
 function load() {
   if (!fs.existsSync(STATS_PATH)) return { ...EMPTY_STATS, unmatchedTemplates: {} };
-  return JSON.parse(fs.readFileSync(STATS_PATH, 'utf-8'));
+  // Merge onto EMPTY_STATS so an older stats file (missing newer counters
+  // added since it was last written) doesn't throw in recordEvent.
+  const onDisk = JSON.parse(fs.readFileSync(STATS_PATH, 'utf-8'));
+  return { ...EMPTY_STATS, ...onDisk, unmatchedTemplates: onDisk.unmatchedTemplates || {} };
 }
 
 function save(stats) {

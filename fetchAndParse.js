@@ -100,7 +100,7 @@ async function main() {
         stats.recordEvent('aiFallbackFailure');
         stats.recordEvent('needsReview');
         console.log(`  [LLM fallback failed for message ${ref.id}]: ${err.message} — flagged for review, not dropped`);
-        db.upsertTransaction(ref.id, {
+        await db.upsertTransaction(ref.id, {
           needsReview: true,
           sourceParser: result.sourceParser,
           rawText: result.rawText,
@@ -113,7 +113,7 @@ async function main() {
       stats.recordEvent('deterministicMatch');
     }
 
-    const inserted = db.upsertTransaction(ref.id, result, isoDate);
+    const inserted = await db.upsertTransaction(ref.id, result, isoDate);
     if (!inserted) continue; // already ingested on a previous run — idempotent, skip quietly
 
     results.push(result);

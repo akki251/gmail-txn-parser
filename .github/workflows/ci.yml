@@ -20,3 +20,5 @@ jobs:
       - run: npm run test:sms
       - run: npm run test:nontransactional
       - run: npm run test:stats
+      - run: npm run test:matching
+      - run: npm run test:dedup

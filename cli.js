@@ -93,6 +93,33 @@ switch (command) {
     console.log(`  - succeeded:              ${s.aiFallbackSuccess}`);
     console.log(`  - failed:                 ${s.aiFallbackFailure}`);
     console.log(`needsReview (all fallbacks failed): ${s.needsReview}`);
+    console.log('');
+    console.log('Cross-source matching (source message -> canonical transaction):');
+    const pctMatch = (n) => (s.matchAttempts > 0 ? ((n / s.matchAttempts) * 100).toFixed(1) : '0.0');
+    console.log(`  Match attempts:            ${s.matchAttempts}`);
+    console.log(`  - by reference number:     ${s.matchedByReference} (${pctMatch(s.matchedByReference)}%)`);
+    console.log(`  - by deterministic attrs:  ${s.matchedByDeterministic} (${pctMatch(s.matchedByDeterministic)}%)`);
+    console.log(`  - by confidence score:     ${s.matchedByScore} (${pctMatch(s.matchedByScore)}%)`);
+    console.log(`  - by AI arbitration:       ${s.matchedByAI} (${pctMatch(s.matchedByAI)}%)`);
+    console.log(`  - unmatched (new txn):     ${s.unmatchedNew} (${pctMatch(s.unmatchedNew)}%)`);
+    break;
+  }
+
+  case 'sources': {
+    const [transactionId] = args;
+    if (!transactionId) {
+      console.log('Usage: node cli.js sources <transactionId>');
+      break;
+    }
+    const txn = db.getTransaction(transactionId);
+    if (!txn) {
+      console.log(`Unknown transaction: ${transactionId}`);
+      break;
+    }
+    console.log(`${txn.sources.length} source message(s) for ${transactionId} (${money(txn.amount)} ${txn.merchant || ''}):`);
+    for (const s of txn.sources) {
+      console.log(`  [${s.sourceType}] ${s.id}  received ${s.receivedAt}  match=${s.matchMethod || 'original'}${s.matchConfidence != null ? ` (${s.matchConfidence})` : ''}`);
+    }
     break;
   }
 
@@ -120,5 +147,6 @@ switch (command) {
   node cli.js settle <friend> [amount]         mark a friend's balance paid (full, or partial if amount given)
   node cli.js friends                          list known friends
   node cli.js stats                            show parse-pipeline stats (deterministic vs AI-fallback rate)
-  node cli.js unmatched-templates               show recurring SMS/email formats still hitting the AI fallback`);
+  node cli.js unmatched-templates               show recurring SMS/email formats still hitting the AI fallback
+  node cli.js sources <id>                      show which source messages (SMS/email) built a canonical transaction, and how they were matched`);
 }
