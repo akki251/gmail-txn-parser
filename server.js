@@ -184,6 +184,8 @@ async function handleSmsIngest(req, res) {
       }
     })();
     return;
+  }
+
   stats.recordEvent('deterministicMatch');
   sendJson(res, 200, { ok: true, stored: true });
 
