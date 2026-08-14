@@ -8,13 +8,12 @@ const { isNonTransactional } = require('./nonTransactional');
 const SMS_PARSERS = [
   {
     name: 'ICICI Bank SMS',
-    matchSender: (sender) => /ICICI/i.test(sender),
+    matchSender: (sender, text) => /ICICI/i.test(sender || '') || /ICICI/i.test(text || ''),
     parse: (text) => {
       // Case 1: UPI debit: "ICICI Bank Acct XX123 debited for Rs 1.00 on 05-Aug-26;
-      // JORDAN LEE credited. UPI:400000000004." — "for" is sometimes absent
-      // ("debited Rs 22500.00 on 14-Aug-26"), so it's optional here.
+      // JORDAN LEE credited. UPI:400000000004." — handles "Acct"/"Account", optional "for", flexible spaces
       let re =
-        /ICICI Bank Acct (XX\d+|\d+) debited(?: for)? Rs\s?([\d,]+\.?\d*)\s+on\s+([\d]{1,2}-\w{3}-\d{2,4});\s*(.+?)\s+credited\.\s*UPI:(\d+)/i;
+        /ICICI Bank (?:Acct|Account)\s*(\w+)\s+(?:has been\s+)?debited(?: for)?\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+on\s+([\d]{1,2}-[\w]{3}-[\d]{2,4});?\s*(.+?)\s+credited(?:\.|\s)*?(?:UPI:?\s*|\s*)?(\d+)?/i;
       let m = text.match(re);
       if (m) {
         return {
@@ -23,10 +22,10 @@ const SMS_PARSERS = [
           account: m[1],
           amount: parseFloat(m[2].replace(/,/g, '')),
           currency: 'INR',
-          merchant: m[4].trim(),
+          merchant: m[4] ? m[4].trim() : null,
           rawDate: m[3],
           paymentMode: 'UPI',
-          refNo: m[5],
+          refNo: m[5] || null,
           type: 'debit',
           status: 'Approved',
         };
@@ -35,7 +34,7 @@ const SMS_PARSERS = [
       // Case 2: Card debit (Prepaid / Debit / Credit Card)
       // "Dear Customer, Rs 146.70 debited from ICICI Bank Prepaid Card 5278 on 11-Aug-26. Info- ZOMATO."
       re =
-        /Rs\s?([\d,]+\.?\d*)\s+debited from ICICI Bank (Prepaid Card|Debit Card|Credit Card|Card)\s+(\w+)\s+on\s+([\d]{1,2}-\w{3}-\d{2,4})\.\s*Info-?\s*([^.]+)\./i;
+        /(?:Rs\.?|INR)\s?([\d,]+\.?\d*)\s+debited from ICICI Bank (Prepaid Card|Debit Card|Credit Card|Card|Account)\s+(\w+)\s+on\s+([\d]{1,2}-\w{3}-\d{2,4})\.\s*Info-?\s*([^.]+)\./i;
       m = text.match(re);
       if (m) {
         return {
@@ -51,17 +50,31 @@ const SMS_PARSERS = [
         };
       }
 
+      // Case 3: Generic ICICI Debit Fallback
+      re = /ICICI Bank (?:Acct|Account|Card)\s*(\w+)?\s*(?:debited|has been debited)\s*(?:for)?\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)/i;
+      m = text.match(re);
+      if (m) {
+        return {
+          bank: 'ICICI Bank',
+          instrument: 'Account',
+          account: m[1] || null,
+          amount: parseFloat(m[2].replace(/,/g, '')),
+          currency: 'INR',
+          merchant: null,
+          type: 'debit',
+          status: 'Approved',
+        };
+      }
+
       return null;
     },
   },
 
   {
     name: 'OneCard SMS',
-    matchSender: (sender) => /OneCrd/i.test(sender),
+    matchSender: (sender, text) => /OneCrd|OneCard/i.test(sender || '') || /OneCard/i.test(text || ''),
     parse: (text) => {
-      // "Rs. 189.01 sent from OneCard on 06 Aug 2026 to Dominospizza.
-      // Not you? Call on 18002109111 to report -OneCard"
-      const re = /Rs\.?\s?([\d,]+\.?\d*)\s+sent from OneCard on\s+([\d]{1,2}\s+\w{3}\s+\d{4})\s+to\s+(.+?)\./i;
+      const re = /(?:Rs\.?|INR)\s?([\d,]+\.?\d*)\s+sent from OneCard on\s+([\d]{1,2}\s+\w{3}\s+\d{4})\s+to\s+(.+?)\./i;
       const m = text.match(re);
       if (!m) return null;
       return {
@@ -82,15 +95,9 @@ function parseTransactionSms({ sender, text }) {
   if (!text) return null;
 
   for (const parser of SMS_PARSERS) {
-    if (parser.matchSender(sender)) {
-      // OTP/login/password-reset SMS from a known bank sender — not a
-      // transaction, skip before wasting a parse attempt or an LLM call.
+    if (parser.matchSender(sender, text)) {
       if (isNonTransactional(text)) return { notATransaction: true, sourceParser: parser.name };
 
-      // A thrown error (regex bug, unexpected input shape, etc.) is exactly
-      // the "silly parsing error" case that must still reach the LLM
-      // fallback, not crash and silently drop the message — same safety
-      // net as a clean `return null` regex miss.
       let result;
       try {
         result = parser.parse(text);

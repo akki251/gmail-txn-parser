@@ -5,12 +5,6 @@
  * Only mail from a sender pattern below is even looked at — so Swiggy
  * "payment failed" mails, income-tax refund notices, promo mail etc.
  * are ignored by construction, no extra filtering logic needed.
- *
- * Each parser has two failure modes handled differently:
- *  - sender doesn't match any bank  -> return null (not a transaction, ignore)
- *  - sender matches a bank but the regex doesn't match the body
- *    (bank changed their template) -> return { needsLLMFallback: true, rawText }
- *    so you fall back to an LLM call instead of silently dropping real money movement.
  */
 const { isNonTransactional } = require('./nonTransactional');
 
@@ -29,10 +23,18 @@ function stripHtml(html) {
     .trim();
 }
 
+function senderMatches(sender, text, keywordPattern) {
+  const s = sender || '';
+  if (keywordPattern.test(s)) return true;
+  // If sender header has no bank domain (e.g. generic SMS relay or manual ingest), fallback to body text search
+  if ((!s || !/\.[a-z]{2,}$/i.test(s)) && keywordPattern.test(text || '')) return true;
+  return false;
+}
+
 const BANK_PARSERS = [
   {
     name: 'IndusInd Credit Card',
-    matchSender: (sender) => /indusind\.com$/i.test(sender),
+    matchSender: (sender, text) => senderMatches(sender, text, /indusind/i),
     parse: (text) => {
       const re =
         /IndusInd Bank Credit Card ending (\d+)\s+for\s+INR\s+([\d,]+\.\d{2})\s+on\s+([\d-]{10}\s+[\d:]{5,8}\s*(?:am|pm))\s+at\s+(.+?)\s+is\s+(Approved|Declined)/i;
@@ -53,7 +55,7 @@ const BANK_PARSERS = [
   },
   {
     name: 'SBI Card',
-    matchSender: (sender) => /sbicard\.com$/i.test(sender),
+    matchSender: (sender, text) => senderMatches(sender, text, /sbicard|sbi/i),
     parse: (text) => {
       const re =
         /Rs\.?\s?([\d,]+\.\d{2})\s+spent on your SBI Credit Card ending with (\d+)\s+at\s+(.+?)\s+on\s+([\d-]{8})\s+via\s+(\w+)(?:\s+\(Ref No\.?\s*([\d]+)\))?/i;
@@ -75,49 +77,8 @@ const BANK_PARSERS = [
     },
   },
   {
-    name: 'ICICI Bank',
-    matchSender: (sender) => /icici\.bank\.in$/i.test(sender),
-    parse: (text) => {
-      // Case 1: debit card purchase
-      let re =
-        /A purchase of Rs\.?\s?([\d,]+\.\d{2})\s+has been made using your Debit Card linked to ICICI Bank Account (\w+)\s+on\s+([\d]{1,2}-\w{3}-\d{2,4})\.\s*Info:\s*([^.]+)\./i;
-      let m = text.match(re);
-      if (m) {
-        return {
-          bank: 'ICICI Bank',
-          instrument: 'Debit Card',
-          account: m[2],
-          amount: parseFloat(m[1].replace(/,/g, '')),
-          currency: 'INR',
-          merchant: m[4].trim(),
-          rawDate: m[3],
-          type: 'debit',
-          status: 'Approved',
-        };
-      }
-      // Case 2: account credited (salary, refund, interest, etc.)
-      re =
-        /Your ICICI Bank Account (\w+)\s+has been credited with INR\s+([\d,]+(?:\.\d+)?)\s+on\s+([\d]{1,2}-\w{3}-\d{2,4})/i;
-      m = text.match(re);
-      if (m) {
-        return {
-          bank: 'ICICI Bank',
-          instrument: 'Account',
-          account: m[1],
-          amount: parseFloat(m[2].replace(/,/g, '')),
-          currency: 'INR',
-          merchant: null,
-          rawDate: m[3],
-          type: 'credit',
-          status: 'Approved',
-        };
-      }
-      return null;
-    },
-  },
-  {
     name: 'HDFC Bank',
-    matchSender: (sender) => /hdfcbank\.bank\.in$/i.test(sender),
+    matchSender: (sender, text) => senderMatches(sender, text, /hdfc/i),
     parse: (text) => {
       // Case 1: credit card purchase
       let re =
@@ -177,8 +138,49 @@ const BANK_PARSERS = [
     },
   },
   {
+    name: 'ICICI Bank',
+    matchSender: (sender, text) => senderMatches(sender, text, /icici/i),
+    parse: (text) => {
+      // Case 1: debit card purchase
+      let re =
+        /A purchase of Rs\.?\s?([\d,]+\.\d{2})\s+has been made using your Debit Card linked to ICICI Bank Account (\w+)\s+on\s+([\d]{1,2}-\w{3}-\d{2,4})\.\s*Info:\s*([^.]+)\./i;
+      let m = text.match(re);
+      if (m) {
+        return {
+          bank: 'ICICI Bank',
+          instrument: 'Debit Card',
+          account: m[2],
+          amount: parseFloat(m[1].replace(/,/g, '')),
+          currency: 'INR',
+          merchant: m[4].trim(),
+          rawDate: m[3],
+          type: 'debit',
+          status: 'Approved',
+        };
+      }
+      // Case 2: account credited (salary, refund, interest, etc.)
+      re =
+        /Your ICICI Bank Account (\w+)\s+has been credited with INR\s+([\d,]+(?:\.\d+)?)\s+on\s+([\d]{1,2}-\w{3}-\d{2,4})/i;
+      m = text.match(re);
+      if (m) {
+        return {
+          bank: 'ICICI Bank',
+          instrument: 'Account',
+          account: m[1],
+          amount: parseFloat(m[2].replace(/,/g, '')),
+          currency: 'INR',
+          merchant: null,
+          rawDate: m[3],
+          type: 'credit',
+          status: 'Approved',
+        };
+      }
+      return null;
+    },
+  },
+  {
     name: 'Axis Bank',
-    matchSender: (sender) => /axis\.bank\.in$/i.test(sender),
+    matchSender: (sender, text) => senderMatches(sender, text, /axis/i),
     parse: (text) => {
       const re =
         /Transaction Amount:\s*INR\s*([\d,]+\.?\d*)\s*Merchant Name:\s*(.+?)\s*Axis Bank Credit Card No\.\s*(\w+)\s*Date\s*&\s*Time:\s*([\d-]{10},\s*[\d:]{5,8}\s*\w*)/i;
@@ -204,15 +206,9 @@ function parseTransactionEmail({ sender, htmlBody, plaintextBody }) {
   if (!text) return null;
 
   for (const parser of BANK_PARSERS) {
-    if (parser.matchSender(sender)) {
-      // OTP/login/password-reset mail from a known bank sender — not a
-      // transaction, skip before wasting a parse attempt or an LLM call.
+    if (parser.matchSender(sender, text)) {
       if (isNonTransactional(text)) return { notATransaction: true, sourceParser: parser.name };
 
-      // A thrown error (regex bug, unexpected input shape, etc.) is exactly
-      // the "silly parsing error" case that must still reach the LLM
-      // fallback, not crash and silently drop the message — same safety
-      // net as a clean `return null` regex miss.
       let result;
       try {
         result = parser.parse(text);
@@ -222,11 +218,10 @@ function parseTransactionEmail({ sender, htmlBody, plaintextBody }) {
       if (result) {
         return { ...result, sourceParser: parser.name, needsLLMFallback: false };
       }
-      // Known bank, but template didn't match our regex -> don't drop it, flag it.
       return { needsLLMFallback: true, sourceParser: parser.name, rawText: text };
     }
   }
-  return null; // not a recognized bank sender -> not a transaction, ignore
+  return null;
 }
 
 module.exports = { parseTransactionEmail, stripHtml, BANK_PARSERS };
