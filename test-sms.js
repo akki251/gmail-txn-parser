@@ -16,6 +16,12 @@ const fixtures = [
       'ICICI Bank Acct XX299 debited Rs 22500.00 on 14-Aug-26; AKSHANSH SHRIVA credited. UPI:213151704707. Call 18002662 dispute. SMS BLOCK 299 to 9215676766',
   },
   {
+    label: 'ICICI — incoming UPI credit',
+    sender: 'ICICIT-S',
+    text:
+      'Dear Customer, Acct XX299 is credited with Rs 1.00 on 15-Aug-26 from AKSHANSH SHRIVA. UPI:213256165737-ICICI Bank.',
+  },
+  {
     label: 'ICICI — Prepaid Card debit',
     sender: 'ICICIT-S',
     text:

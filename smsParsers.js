@@ -36,6 +36,28 @@ const SMS_PARSERS = [
         };
       }
 
+      // Case 1b: Incoming credit — different phrasing from the debit alert
+      // above: "Dear Customer, Acct XX299 is credited with Rs 1.00 on
+      // 15-Aug-26 from AKSHANSH SHRIVA. UPI:213256165737-ICICI Bank."
+      re =
+        /Dear Customer,\s*Acct\s+(\w+)\s+is credited with Rs\.?\s?([\d,]+\.?\d*)\s+on\s+([\d]{1,2}-\w{3}-\d{2,4})\s+from\s+(.+?)\.\s*UPI:(\d+)/i;
+      m = text.match(re);
+      if (m) {
+        return {
+          bank: 'ICICI Bank',
+          instrument: 'Account',
+          account: m[1],
+          amount: parseFloat(m[2].replace(/,/g, '')),
+          currency: 'INR',
+          merchant: m[4].trim(),
+          rawDate: m[3],
+          paymentMode: 'UPI',
+          refNo: m[5],
+          type: 'credit',
+          status: 'Approved',
+        };
+      }
+
       // Case 2: Card debit (Prepaid / Debit / Credit Card)
       // "Dear Customer, Rs 146.70 debited from ICICI Bank Prepaid Card 5278 on 11-Aug-26. Info- ZOMATO."
       re =
