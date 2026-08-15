@@ -11,9 +11,14 @@ const SMS_PARSERS = [
     matchSender: (sender, text) => /ICICI/i.test(sender || '') || /ICICI/i.test(text || ''),
     parse: (text) => {
       // Case 1: UPI debit: "ICICI Bank Acct XX123 debited for Rs 1.00 on 05-Aug-26;
-      // JORDAN LEE credited. UPI:400000000004." — handles "Acct"/"Account", optional "for", flexible spaces
+      // JORDAN LEE credited. UPI:400000000004." — handles "Acct"/"Account", optional "for", flexible spaces.
+      // The refNo group MUST be a single clean optional group, not a chain
+      // of lazy/optional quantifiers — a previous version had
+      // `(?:\.|\s)*?(?:UPI:?\s*|\s*)?(\d+)?` here, where every piece could
+      // match zero-width, so the regex engine short-circuited before ever
+      // reaching the literal "UPI:" text and silently dropped every refNo.
       let re =
-        /ICICI Bank (?:Acct|Account)\s*(\w+)\s+(?:has been\s+)?debited(?: for)?\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+on\s+([\d]{1,2}-[\w]{3}-[\d]{2,4});?\s*(.+?)\s+credited(?:\.|\s)*?(?:UPI:?\s*|\s*)?(\d+)?/i;
+        /ICICI Bank (?:Acct|Account)\s*(\w+)\s+(?:has been\s+)?debited(?: for)?\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+on\s+([\d]{1,2}-[\w]{3}-[\d]{2,4});?\s*(.+?)\s+credited\.?\s*(?:UPI:?\s*(\d+))?/i;
       let m = text.match(re);
       if (m) {
         return {
