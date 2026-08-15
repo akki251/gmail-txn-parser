@@ -13,11 +13,19 @@ let listenerSubscription = null;
 /**
  * Process an incoming raw SMS string (from BroadcastReceiver or manual mock)
  */
+import { isNonTransactional } from '../parsers/nonTransactional';
+
 export async function processIncomingSms({ sender, text, date }) {
   if (!text) return null;
 
   await db.loadDb();
   console.log('[SMS Ingest Bridge] Processing incoming SMS:', { sender, text });
+
+  // Pre-filter non-transactional alerts (pending payment requests, OTPs, due reminders)
+  if (isNonTransactional(text)) {
+    console.log('[SMS Ingest Bridge] Non-transactional alert ignored:', text);
+    return { notATransaction: true };
+  }
 
   // Step 1: Run deterministic regex parser
   let result = parseTransactionSms({ sender, text });
