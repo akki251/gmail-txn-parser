@@ -34,6 +34,12 @@ export default function Dashboard() {
     setTransactions(db.getTransactions());
   };
 
+  const handleClearAll = async () => {
+    await db.clearAllData();
+    await loadData();
+    DeviceEventEmitter.emit('TRANSACTION_ADDED');
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
     await loadData();
@@ -102,8 +108,15 @@ export default function Dashboard() {
       
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Offline Ledger</Text>
-        <Text style={styles.headerSubtitle}>Air-Gapped Bank SMS Parser</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <View>
+            <Text style={styles.headerTitle}>Offline Ledger</Text>
+            <Text style={styles.headerSubtitle}>Air-Gapped Bank SMS Parser</Text>
+          </View>
+          <TouchableOpacity onPress={handleClearAll} style={{ backgroundColor: '#334155', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
+            <Text style={{ color: '#f43f5e', fontSize: 12, fontWeight: '600' }}>🗑️ Clear All</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Metrics Row */}

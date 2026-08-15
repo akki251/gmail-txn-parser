@@ -2,15 +2,7 @@
  * Flat-JSON Local Storage for Android React Native (expo-file-system).
  * Manages transactions, source messages, expense splits, friends, and needsReview queue.
  */
-let FileSystem = null;
-try {
-  FileSystem = require('expo-file-system');
-} catch {
-  // Expo FileSystem not available in plain Node env
-}
-
-const fs = require('fs');
-const path = require('path');
+import * as FileSystem from 'expo-file-system';
 
 const DB_FILENAME = 'db.json';
 let localDbPath = null;
@@ -37,7 +29,7 @@ function getDbPath() {
   if (FileSystem && FileSystem.documentDirectory) {
     localDbPath = FileSystem.documentDirectory + DB_FILENAME;
   } else {
-    localDbPath = path.join(process.cwd(), DB_FILENAME);
+    localDbPath = DB_FILENAME;
   }
   return localDbPath;
 }
@@ -51,9 +43,6 @@ async function loadDb() {
         const content = await FileSystem.readAsStringAsync(filePath);
         memoryDb = JSON.parse(content);
       }
-    } else if (fs.existsSync(filePath)) {
-      const content = fs.readFileSync(filePath, 'utf8');
-      memoryDb = JSON.parse(content);
     }
   } catch (err) {
     console.warn('[DB] Using default memory database:', err.message);
@@ -67,8 +56,6 @@ async function saveDb() {
     const data = JSON.stringify(memoryDb, null, 2);
     if (FileSystem && FileSystem.documentDirectory) {
       await FileSystem.writeAsStringAsync(filePath, data);
-    } else {
-      fs.writeFileSync(filePath, data, 'utf8');
     }
   } catch (err) {
     console.error('[DB] Failed to persist database:', err);
@@ -144,6 +131,13 @@ async function addFriend(name) {
   return friend;
 }
 
+async function clearAllData() {
+  memoryDb.transactions = {};
+  memoryDb.sourceMessages = {};
+  memoryDb.splits = {};
+  await saveDb();
+}
+
 module.exports = {
   loadDb,
   saveDb,
@@ -155,4 +149,5 @@ module.exports = {
   updateTransaction,
   createSplit,
   addFriend,
+  clearAllData,
 };
