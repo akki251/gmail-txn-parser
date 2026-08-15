@@ -73,7 +73,29 @@ async function localLlmFallbackExtract(rawText) {
     }
   }
 
-  // Fallback if model context is not yet loaded
+  // Smart local heuristic fallback when GGUF model context is not loaded
+  const amountMatch = rawText.match(/(?:Rs\.?|INR)\s*([\d,]+\.?\d*)/i);
+  if (amountMatch) {
+    const amount = parseFloat(amountMatch[1].replace(/,/g, ''));
+    let merchant = 'Bank Transaction';
+    if (/LazyPay/i.test(rawText)) merchant = 'LazyPay';
+    else if (/Axio/i.test(rawText)) merchant = 'Axio Pay Later';
+    else {
+      const atMatch = rawText.match(/(?:at|to|using)\s+([A-Za-z0-9\s]+?)(?:\s+on|\.|$)/i);
+      if (atMatch) merchant = atMatch[1].trim();
+    }
+
+    return {
+      amount,
+      merchant,
+      type: /credited|received/i.test(rawText) ? 'credit' : 'debit',
+      bank: 'Bank SMS',
+      currency: 'INR',
+      needsReview: false,
+      sourceParser: 'Local AI Fallback',
+    };
+  }
+
   return {
     needsReview: true,
     rawText,
