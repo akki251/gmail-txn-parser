@@ -154,6 +154,25 @@ const SMS_PARSERS = [
       };
     },
   },
+
+  {
+    name: 'Axio Pay Later SMS',
+    matchSender: (sender, text) => /axio/i.test(sender || '') || /axio/i.test(text || ''),
+    parse: (text) => {
+      const re = /(?:availing Pay Later credit|spent|debited|charged)(?: of)?\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)/i;
+      const m = text.match(re);
+      if (!m) return null;
+      return {
+        bank: 'Axio',
+        instrument: 'Pay Later',
+        amount: parseFloat(m[1].replace(/,/g, '')),
+        currency: 'INR',
+        merchant: 'Axio Pay Later',
+        type: 'debit',
+        status: 'Approved',
+      };
+    },
+  },
 ];
 
 function parseTransactionSms({ sender, text }) {
