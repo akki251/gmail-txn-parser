@@ -10,14 +10,17 @@ import {
   Modal,
   ScrollView,
   RefreshControl,
+  TextInput,
+  DeviceEventEmitter,
 } from 'react-native';
 import db from '../store/db';
-
-import { DeviceEventEmitter } from 'react-native';
+import SpendingChart from '../components/SpendingChart';
 
 export default function Dashboard() {
   const [transactions, setTransactions] = useState([]);
-  const [selectedFilter, setSelectedFilter] = useState('All');
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState('All');
+  const [selectedBankFilter, setSelectedBankFilter] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedTxn, setSelectedTxn] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -46,11 +49,27 @@ export default function Dashboard() {
     setRefreshing(false);
   };
 
+  // Get unique bank names for filter pills
+  const availableBanks = ['All', ...new Set(transactions.map((t) => t.bank).filter(Boolean))];
+
   const filteredTxns = transactions.filter((t) => {
-    if (selectedFilter === 'All') return true;
-    if (selectedFilter === 'Debit') return t.type === 'debit';
-    if (selectedFilter === 'Credit') return t.type === 'credit';
-    if (selectedFilter === 'Needs Review') return t.needsReview;
+    // Search Query Filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchMerchant = (t.merchant || '').toLowerCase().includes(q);
+      const matchBank = (t.bank || '').toLowerCase().includes(q);
+      const matchRaw = (t.rawText || '').toLowerCase().includes(q);
+      if (!matchMerchant && !matchBank && !matchRaw) return false;
+    }
+
+    // Type Filter
+    if (selectedTypeFilter === 'Debit' && t.type !== 'debit') return false;
+    if (selectedTypeFilter === 'Credit' && t.type !== 'credit') return false;
+    if (selectedTypeFilter === 'Needs Review' && !t.needsReview) return false;
+
+    // Bank Filter
+    if (selectedBankFilter !== 'All' && t.bank !== selectedBankFilter) return false;
+
     return true;
   });
 
@@ -74,8 +93,8 @@ export default function Dashboard() {
         activeOpacity={0.7}
       >
         <View style={styles.cardHeader}>
-          <View style={styles.iconBadge}>
-            <Text style={styles.iconText}>
+          <View style={[styles.iconBadge, { backgroundColor: isDebit ? '#881337' : '#064e3b' }]}>
+            <Text style={[styles.iconText, { color: amountColor }]}>
               {item.bank ? item.bank.charAt(0) : '₹'}
             </Text>
           </View>
@@ -84,7 +103,7 @@ export default function Dashboard() {
               {item.merchant || item.sourceParser || 'Bank Transaction'}
             </Text>
             <Text style={styles.bankSubtext}>
-              {item.bank || 'Bank'} • {item.instrument || 'SMS Alert'}
+              {item.bank || 'Bank SMS'} • {item.instrument || 'SMS Alert'}
             </Text>
           </View>
           <View style={styles.cardAmountContainer}>
@@ -105,16 +124,16 @@ export default function Dashboard() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
-      
-      {/* Header */}
+
+      {/* Header Bar */}
       <View style={styles.header}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <View>
             <Text style={styles.headerTitle}>Offline Ledger</Text>
             <Text style={styles.headerSubtitle}>Air-Gapped Bank SMS Parser</Text>
           </View>
-          <TouchableOpacity onPress={handleClearAll} style={{ backgroundColor: '#334155', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
-            <Text style={{ color: '#f43f5e', fontSize: 12, fontWeight: '600' }}>🗑️ Clear All</Text>
+          <TouchableOpacity onPress={handleClearAll} style={styles.clearBtn}>
+            <Text style={styles.clearBtnText}>🗑️ Clear All</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -123,108 +142,143 @@ export default function Dashboard() {
       <View style={styles.metricsContainer}>
         <View style={[styles.metricCard, styles.spentCard]}>
           <Text style={styles.metricLabel}>Total Spent</Text>
-          <Text style={styles.metricValue}>₹{totalSpent.toLocaleString('en-IN')}</Text>
+          <Text style={[styles.metricValue, { color: '#f43f5e' }]}>₹{totalSpent.toLocaleString('en-IN')}</Text>
         </View>
         <View style={[styles.metricCard, styles.creditedCard]}>
           <Text style={styles.metricLabel}>Total Received</Text>
-          <Text style={styles.metricValue}>₹{totalCredited.toLocaleString('en-IN')}</Text>
+          <Text style={[styles.metricValue, { color: '#10b981' }]}>₹{totalCredited.toLocaleString('en-IN')}</Text>
         </View>
       </View>
 
-      {/* Filter Pills */}
-      <View style={styles.filtersRow}>
-        {['All', 'Debit', 'Credit', 'Needs Review'].map((filter) => (
-          <TouchableOpacity
-            key={filter}
-            style={[
-              styles.filterPill,
-              selectedFilter === filter && styles.activeFilterPill,
-            ]}
-            onPress={() => setSelectedFilter(filter)}
-          >
-            <Text
-              style={[
-                styles.filterPillText,
-                selectedFilter === filter && styles.activeFilterPillText,
-              ]}
-            >
-              {filter}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* Transactions List */}
       <FlatList
         data={filteredTxns}
-        keyExtractor={(item, index) => item.id || String(index)}
+        keyExtractor={(item) => item.id}
         renderItem={renderTxnItem}
         contentContainerStyle={styles.listContent}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#6366f1"
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#818cf8" />
+        }
+        ListHeaderComponent={
+          <View>
+            {/* Visual Spending Breakdown Graph */}
+            <SpendingChart transactions={transactions} />
+
+            {/* Search Input Bar */}
+            <View style={styles.searchContainer}>
+              <Text style={styles.searchIcon}>🔍</Text>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search transactions, merchants, or banks..."
+                placeholderTextColor="#64748b"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              {searchQuery ? (
+                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                  <Text style={styles.clearSearchText}>✕</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            {/* Type Filters */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersRow}>
+              {['All', 'Debit', 'Credit', 'Needs Review'].map((filter) => (
+                <TouchableOpacity
+                  key={filter}
+                  style={[
+                    styles.filterPill,
+                    selectedTypeFilter === filter && styles.filterPillActive,
+                  ]}
+                  onPress={() => setSelectedTypeFilter(filter)}
+                >
+                  <Text
+                    style={[
+                      styles.filterPillText,
+                      selectedTypeFilter === filter && styles.filterPillTextActive,
+                    ]}
+                  >
+                    {filter}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {/* Bank Source Filters */}
+            {availableBanks.length > 2 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bankFiltersRow}>
+                {availableBanks.map((bank) => (
+                  <TouchableOpacity
+                    key={bank}
+                    style={[
+                      styles.bankPill,
+                      selectedBankFilter === bank && styles.bankPillActive,
+                    ]}
+                    onPress={() => setSelectedBankFilter(bank)}
+                  >
+                    <Text
+                      style={[
+                        styles.bankPillText,
+                        selectedBankFilter === bank && styles.bankPillTextActive,
+                      ]}
+                    >
+                      {bank}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+          </View>
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No transactions found</Text>
-            <Text style={styles.emptySubtext}>
-              Incoming bank SMS will appear here automatically.
-            </Text>
+            <Text style={styles.emptyText}>No matching transactions found</Text>
+            <Text style={styles.emptySubtext}>Incoming bank SMS alerts will automatically appear here.</Text>
           </View>
         }
       />
 
       {/* Transaction Detail Modal */}
       {selectedTxn && (
-        <Modal
-          visible={Boolean(selectedTxn)}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => setSelectedTxn(null)}
-        >
+        <Modal transparent animationType="fade" visible={!!selectedTxn}>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Transaction Details</Text>
                 <TouchableOpacity onPress={() => setSelectedTxn(null)}>
-                  <Text style={styles.closeBtn}>✕</Text>
+                  <Text style={styles.modalClose}>✕</Text>
                 </TouchableOpacity>
               </View>
-              <ScrollView style={styles.modalBody}>
-                <Text style={styles.modalAmount}>
-                  ₹{Number(selectedTxn.amount || 0).toLocaleString('en-IN')}
-                </Text>
-                <Text style={styles.modalMerchant}>
-                  {selectedTxn.merchant || 'Bank Alert'}
-                </Text>
 
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Bank:</Text>
-                  <Text style={styles.detailValue}>{selectedTxn.bank || 'N/A'}</Text>
+              <View style={styles.modalBody}>
+                <Text style={[styles.modalAmount, { color: selectedTxn.type === 'debit' ? '#f43f5e' : '#10b981' }]}>
+                  {selectedTxn.type === 'debit' ? '-' : '+'}₹{Number(selectedTxn.amount || 0).toLocaleString('en-IN')}
+                </Text>
+                <Text style={styles.modalMerchant}>{selectedTxn.merchant || 'Bank Transaction'}</Text>
+
+                <View style={styles.modalRow}>
+                  <Text style={styles.modalRowLabel}>Bank:</Text>
+                  <Text style={styles.modalRowValue}>{selectedTxn.bank || 'N/A'}</Text>
                 </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Instrument:</Text>
-                  <Text style={styles.detailValue}>{selectedTxn.instrument || 'Account'}</Text>
+                <View style={styles.modalRow}>
+                  <Text style={styles.modalRowLabel}>Instrument:</Text>
+                  <Text style={styles.modalRowValue}>{selectedTxn.instrument || 'SMS Alert'}</Text>
                 </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Parser Mode:</Text>
-                  <Text style={styles.detailValue}>{selectedTxn.sourceParser || 'Regex'}</Text>
+                <View style={styles.modalRow}>
+                  <Text style={styles.modalRowLabel}>Parser Source:</Text>
+                  <Text style={styles.modalRowValue}>{selectedTxn.sourceParser || 'Deterministic Regex'}</Text>
                 </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Date:</Text>
-                  <Text style={styles.detailValue}>{selectedTxn.date || selectedTxn.rawDate || 'Today'}</Text>
+                <View style={styles.modalRow}>
+                  <Text style={styles.modalRowLabel}>Date:</Text>
+                  <Text style={styles.modalRowValue}>{selectedTxn.date || 'Today'}</Text>
                 </View>
 
-                {selectedTxn.rawText && (
-                  <View style={styles.rawTextContainer}>
-                    <Text style={styles.rawTextLabel}>Raw SMS Payload:</Text>
-                    <Text style={styles.rawTextContent}>{selectedTxn.rawText}</Text>
+                {selectedTxn.rawText ? (
+                  <View style={styles.rawBox}>
+                    <Text style={styles.rawBoxLabel}>Raw SMS Payload:</Text>
+                    <Text style={styles.rawBoxText}>{selectedTxn.rawText}</Text>
                   </View>
-                )}
-              </ScrollView>
+                ) : null}
+              </View>
             </View>
           </View>
         </Modal>
@@ -241,7 +295,7 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 10,
+    paddingBottom: 12,
   },
   headerTitle: {
     fontSize: 24,
@@ -253,74 +307,138 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     marginTop: 2,
   },
+  clearBtn: {
+    backgroundColor: '#1e293b',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  clearBtnText: {
+    color: '#f43f5e',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   metricsContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    marginTop: 10,
+    paddingHorizontal: 16,
+    marginBottom: 16,
     gap: 12,
   },
   metricCard: {
     flex: 1,
+    backgroundColor: '#1e293b',
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
+    borderColor: '#334155',
   },
   spentCard: {
-    backgroundColor: 'rgba(244, 63, 94, 0.1)',
-    borderColor: 'rgba(244, 63, 94, 0.25)',
+    borderLeftWidth: 4,
+    borderLeftColor: '#f43f5e',
   },
   creditedCard: {
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    borderColor: 'rgba(16, 185, 129, 0.25)',
+    borderLeftWidth: 4,
+    borderLeftColor: '#10b981',
   },
   metricLabel: {
     fontSize: 12,
     color: '#94a3b8',
+    fontWeight: '600',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   metricValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#f8fafc',
+    fontSize: 22,
+    fontWeight: '800',
     marginTop: 6,
   },
-  filtersRow: {
+  searchContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    marginTop: 16,
-    gap: 8,
+    alignItems: 'center',
+    backgroundColor: '#1e293b',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+    height: 44,
+  },
+  searchIcon: {
+    fontSize: 14,
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    color: '#f8fafc',
+    fontSize: 14,
+  },
+  clearSearchText: {
+    color: '#94a3b8',
+    fontSize: 16,
+    paddingHorizontal: 6,
+  },
+  filtersRow: {
+    paddingHorizontal: 16,
+    marginBottom: 10,
   },
   filterPill: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
     backgroundColor: '#1e293b',
+    marginRight: 8,
     borderWidth: 1,
     borderColor: '#334155',
   },
-  activeFilterPill: {
+  filterPillActive: {
     backgroundColor: '#6366f1',
     borderColor: '#6366f1',
   },
   filterPillText: {
-    fontSize: 12,
     color: '#94a3b8',
+    fontSize: 13,
     fontWeight: '600',
   },
-  activeFilterPillText: {
+  filterPillTextActive: {
     color: '#ffffff',
+    fontWeight: '700',
+  },
+  bankFiltersRow: {
+    paddingHorizontal: 16,
+    marginBottom: 14,
+  },
+  bankPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#0f172a',
+    marginRight: 6,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  bankPillActive: {
+    backgroundColor: '#334155',
+    borderColor: '#818cf8',
+  },
+  bankPillText: {
+    color: '#64748b',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  bankPillTextActive: {
+    color: '#818cf8',
   },
   listContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 40,
+    paddingBottom: 24,
   },
   card: {
     backgroundColor: '#1e293b',
+    marginHorizontal: 16,
+    marginBottom: 10,
     borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+    padding: 14,
     borderWidth: 1,
     borderColor: '#334155',
   },
@@ -329,30 +447,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   iconBadge: {
-    width: 42,
-    height: 42,
+    width: 40,
+    height: 40,
     borderRadius: 12,
-    backgroundColor: '#334155',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
+    marginRight: 12,
   },
   iconText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#818cf8',
+    fontSize: 16,
+    fontWeight: '800',
   },
   cardMainInfo: {
     flex: 1,
   },
   merchantTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#f8fafc',
   },
   bankSubtext: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: '#64748b',
     marginTop: 2,
   },
   cardAmountContainer: {
@@ -360,104 +476,112 @@ const styles = StyleSheet.create({
   },
   amountText: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   reviewPill: {
-    backgroundColor: '#fbbf24',
+    backgroundColor: '#b45309',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
     marginTop: 4,
   },
   reviewPillText: {
+    color: '#fef3c7',
     fontSize: 10,
     fontWeight: '700',
-    color: '#000000',
   },
   emptyContainer: {
     alignItems: 'center',
-    paddingVertical: 60,
+    paddingVertical: 40,
+    paddingHorizontal: 20,
   },
   emptyText: {
-    fontSize: 16,
     color: '#94a3b8',
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
   },
   emptySubtext: {
-    fontSize: 12,
     color: '#64748b',
+    fontSize: 13,
     marginTop: 4,
+    textAlign: 'center',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.75)',
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
   },
   modalContent: {
     backgroundColor: '#1e293b',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    maxHeight: '80%',
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#334155',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 16,
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#f8fafc',
   },
-  closeBtn: {
-    fontSize: 20,
+  modalClose: {
     color: '#94a3b8',
+    fontSize: 18,
+    paddingHorizontal: 8,
   },
   modalBody: {
-    marginTop: 16,
+    alignItems: 'center',
   },
   modalAmount: {
     fontSize: 32,
     fontWeight: '800',
-    color: '#f8fafc',
-    textAlign: 'center',
   },
   modalMerchant: {
     fontSize: 16,
-    color: '#818cf8',
-    textAlign: 'center',
+    fontWeight: '700',
+    color: '#cbd5e1',
     marginTop: 4,
     marginBottom: 20,
   },
-  detailRow: {
+  modalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 10,
+    width: '100%',
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#334155',
   },
-  detailLabel: {
-    color: '#94a3b8',
-    fontSize: 14,
-  },
-  detailValue: {
-    color: '#f8fafc',
-    fontSize: 14,
+  modalRowLabel: {
+    color: '#64748b',
+    fontSize: 13,
     fontWeight: '600',
   },
-  rawTextContainer: {
-    marginTop: 20,
-    padding: 14,
+  modalRowValue: {
+    color: '#f8fafc',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  rawBox: {
     backgroundColor: '#0f172a',
     borderRadius: 12,
+    padding: 12,
+    marginTop: 16,
+    width: '100%',
   },
-  rawTextLabel: {
-    color: '#64748b',
-    fontSize: 12,
-    marginBottom: 6,
+  rawBoxLabel: {
+    color: '#94a3b8',
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 4,
+    textTransform: 'uppercase',
   },
-  rawTextContent: {
+  rawBoxText: {
     color: '#cbd5e1',
     fontSize: 12,
     fontFamily: 'monospace',
