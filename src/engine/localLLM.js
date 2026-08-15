@@ -1,4 +1,7 @@
-import * as FileSystem from 'expo-file-system';
+let FileSystem = null;
+try {
+  FileSystem = require('expo-file-system');
+} catch {}
 
 let llamaContext = null;
 let isInitializing = false;
@@ -57,13 +60,14 @@ async function autoInitModel(onProgress) {
  */
 async function initLocalModel(modelPath) {
   try {
+    if (!modelPath) return false;
     const { initLlama } = require('llama.rn');
     llamaContext = await initLlama({
       model: modelPath,
-      n_ctx: 1024,
-      n_threads: 4,
-      use_mlock: true,
-      n_gpu_layers: 99, // Enable OpenCL GPU acceleration when available
+      n_ctx: 512,
+      n_threads: 2,
+      use_mlock: false,
+      n_gpu_layers: 0, // Safe CPU execution on Android emulators
     });
     console.log('[llama.rn] Local LLM model initialized successfully:', modelPath);
     return true;
@@ -79,15 +83,15 @@ async function initLocalModel(modelPath) {
 async function localLlmFallbackExtract(rawText) {
   if (!rawText) return { notATransaction: true };
 
-  // Attempt auto-initialization if model context is not yet loaded
-  if (!llamaContext) {
-    await autoInitModel();
-  }
+  try {
+    // Attempt auto-initialization if model context is not yet loaded
+    if (!llamaContext) {
+      await autoInitModel();
+    }
 
-  const prompt = `<|im_start|>system\n${EXTRACTION_SYSTEM_PROMPT}<|im_end|>\n<|im_start|>user\nExtract transaction from: "${rawText}"<|im_end|>\n<|im_start|>assistant\n`;
+    const prompt = `<|im_start|>system\n${EXTRACTION_SYSTEM_PROMPT}<|im_end|>\n<|im_start|>user\nExtract transaction from: "${rawText}"<|im_end|>\n<|im_start|>assistant\n`;
 
-  if (llamaContext) {
-    try {
+    if (llamaContext) {
       const response = await llamaContext.completion({
         prompt,
         n_predict: 128,
@@ -106,12 +110,13 @@ async function localLlmFallbackExtract(rawText) {
           bank: parsed.bank || 'Bank',
           currency: parsed.currency || 'INR',
           notATransaction: Boolean(parsed.notATransaction),
+          needsReview: false,
           sourceParser: 'Local AI (llama.rn)',
         };
       }
-    } catch (err) {
-      console.error('[llama.rn] Extraction error:', err);
     }
+  } catch (err) {
+    console.warn('[llama.rn] Execution error, falling back to local heuristic:', err.message);
   }
 
   // Smart local heuristic fallback when GGUF model context is not loaded
