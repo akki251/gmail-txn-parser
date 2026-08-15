@@ -144,6 +144,12 @@ async function clearAllData() {
   memoryDb.sourceMessages = {};
   memoryDb.splits = {};
   await saveDb();
+  try {
+    const { NativeModules } = require('react-native');
+    if (NativeModules.SmsReceiver && NativeModules.SmsReceiver.clearPendingSms) {
+      await NativeModules.SmsReceiver.clearPendingSms();
+    }
+  } catch (e) {}
 }
 
 module.exports = {
