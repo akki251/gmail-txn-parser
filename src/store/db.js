@@ -79,6 +79,14 @@ function getSplits() {
 }
 
 async function addTransaction(transaction) {
+  // Prevent duplicate insertion of identical SMS raw text
+  if (transaction.rawText) {
+    const existing = Object.values(memoryDb.transactions || {}).find(
+      (t) => t.rawText && t.rawText.trim() === transaction.rawText.trim()
+    );
+    if (existing) return existing;
+  }
+
   const id = transaction.id || `txn_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
   const record = {
     id,
