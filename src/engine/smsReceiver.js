@@ -60,12 +60,40 @@ export async function processIncomingSms({ sender, text, date }) {
 }
 
 /**
+ * Drain background SMS items persisted while app was killed/closed
+ */
+export async function checkPendingBackgroundSms() {
+  if (NativeModules.SmsReceiver && NativeModules.SmsReceiver.getPendingSms) {
+    try {
+      const pendingJson = await NativeModules.SmsReceiver.getPendingSms();
+      const pendingList = JSON.parse(pendingJson || '[]');
+      if (Array.isArray(pendingList) && pendingList.length > 0) {
+        console.log(`[SMS Ingest Bridge] Draining ${pendingList.length} background SMS items...`);
+        for (const item of pendingList) {
+          await processIncomingSms({
+            sender: item.sender || 'SMS',
+            text: item.body || '',
+            date: item.timestamp ? new Date(item.timestamp).toISOString() : new Date().toISOString(),
+          });
+        }
+        await NativeModules.SmsReceiver.clearPendingSms();
+      }
+    } catch (err) {
+      console.warn('[SMS Ingest Bridge] Pending background SMS drain error:', err);
+    }
+  }
+}
+
+/**
  * Start listening for native SMS events
  */
 export function initSmsListener(onTransactionAdded) {
   if (onTransactionAdded) {
     listenerSubscription = DeviceEventEmitter.addListener('TRANSACTION_ADDED', onTransactionAdded);
   }
+
+  // Drain background SMS queue captured while app was closed
+  checkPendingBackgroundSms();
 
   // Listen for native Android SMS broadcast events if bridge is present
   const smsNativeEmitter = NativeModules.SmsReceiver ? new NativeEventEmitter(NativeModules.SmsReceiver) : DeviceEventEmitter;
