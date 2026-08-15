@@ -1,15 +1,43 @@
-import React from 'react';
-import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
+import React, { useEffect } from 'react';
+import { StyleSheet, View, Text, TouchableOpacity, PermissionsAndroid, Platform, AppState } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Dashboard from './src/screens/Dashboard';
 import Splitter from './src/screens/Splitter';
 import ReviewQueue from './src/screens/ReviewQueue';
 import SMSIngestSimulator from './src/screens/SMSIngestSimulator';
+import { initSmsListener, checkPendingBackgroundSms } from './src/engine/smsReceiver';
 
 const Tab = createBottomTabNavigator();
 
 export default function App() {
+  useEffect(() => {
+    async function requestSmsPermissions() {
+      if (Platform.OS === 'android') {
+        try {
+          await PermissionsAndroid.requestMultiple([
+            PermissionsAndroid.PERMISSIONS.RECEIVE_SMS,
+            PermissionsAndroid.PERMISSIONS.READ_SMS,
+          ]);
+        } catch (err) {
+          console.warn('[Permissions] SMS permission error:', err);
+        }
+      }
+    }
+    requestSmsPermissions();
+    const cleanup = initSmsListener();
+
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        checkPendingBackgroundSms();
+      }
+    });
+
+    return () => {
+      cleanup && cleanup();
+      subscription.remove();
+    };
+  }, []);
   return (
     <NavigationContainer>
       <Tab.Navigator

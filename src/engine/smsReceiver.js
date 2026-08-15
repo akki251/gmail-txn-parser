@@ -16,6 +16,7 @@ let listenerSubscription = null;
 export async function processIncomingSms({ sender, text, date }) {
   if (!text) return null;
 
+  await db.loadDb();
   console.log('[SMS Ingest Bridge] Processing incoming SMS:', { sender, text });
 
   // Step 1: Run deterministic regex parser
