@@ -1,8 +1,10 @@
-/**
- * Local On-Device LLM Inference Wrapper using `llama.rn` (llama.cpp C++ OpenCL bindings).
- * Runs SmolLM2-360M or Qwen2.5-0.5B GGUF models directly on Android CPU/GPU offline.
- */
+import * as FileSystem from 'expo-file-system';
+
 let llamaContext = null;
+let isInitializing = false;
+
+const MODEL_URL = 'https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct-GGUF/resolve/main/smollm2-360m-instruct-q4_k_m.gguf';
+const MODEL_FILENAME = 'smollm2-360m-instruct-q4_k_m.gguf';
 
 const EXTRACTION_SYSTEM_PROMPT = `You are a financial transaction extraction assistant.
 Given a bank SMS message text, extract the transaction details and return ONLY a valid JSON object with the following fields:
@@ -16,11 +18,45 @@ Given a bank SMS message text, extract the transaction details and return ONLY a
 Do not include any explanation or markdown formatting, return ONLY the raw JSON object.`;
 
 /**
+ * Download and initialize local llama.rn context with SmolLM2-360M GGUF model.
+ */
+async function autoInitModel(onProgress) {
+  if (llamaContext) return true;
+  if (isInitializing) return false;
+
+  isInitializing = true;
+  try {
+    const targetPath = FileSystem.documentDirectory ? FileSystem.documentDirectory + MODEL_FILENAME : null;
+    if (targetPath) {
+      const info = await FileSystem.getInfoAsync(targetPath);
+      if (!info.exists) {
+        console.log('[llama.rn] Downloading SmolLM2-360M GGUF model weight from HuggingFace...');
+        const downloadResumable = FileSystem.createDownloadResumable(
+          MODEL_URL,
+          targetPath,
+          {},
+          (progress) => {
+            const ratio = progress.totalBytesWritten / progress.totalBytesExpectedToWrite;
+            if (onProgress) onProgress(ratio);
+          }
+        );
+        await downloadResumable.downloadAsync();
+      }
+      return await initLocalModel(targetPath);
+    }
+  } catch (err) {
+    console.warn('[llama.rn] Auto model init warning:', err.message);
+  } finally {
+    isInitializing = false;
+  }
+  return false;
+}
+
+/**
  * Initialize local llama.rn context with a downloaded/bundled .gguf model file.
  */
 async function initLocalModel(modelPath) {
   try {
-    // Dynamically import llama.rn native module in React Native environment
     const { initLlama } = require('llama.rn');
     llamaContext = await initLlama({
       model: modelPath,
@@ -32,7 +68,7 @@ async function initLocalModel(modelPath) {
     console.log('[llama.rn] Local LLM model initialized successfully:', modelPath);
     return true;
   } catch (err) {
-    console.warn('[llama.rn] Could not initialize native C++ LLM context (falling back to mock/offline fallback):', err.message);
+    console.warn('[llama.rn] Native C++ LLM context init warning:', err.message);
     return false;
   }
 }
@@ -42,6 +78,11 @@ async function initLocalModel(modelPath) {
  */
 async function localLlmFallbackExtract(rawText) {
   if (!rawText) return { notATransaction: true };
+
+  // Attempt auto-initialization if model context is not yet loaded
+  if (!llamaContext) {
+    await autoInitModel();
+  }
 
   const prompt = `<|im_start|>system\n${EXTRACTION_SYSTEM_PROMPT}<|im_end|>\n<|im_start|>user\nExtract transaction from: "${rawText}"<|im_end|>\n<|im_start|>assistant\n`;
 
@@ -104,6 +145,7 @@ async function localLlmFallbackExtract(rawText) {
 }
 
 module.exports = {
+  autoInitModel,
   initLocalModel,
   localLlmFallbackExtract,
 };
