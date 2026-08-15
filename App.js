@@ -1,16 +1,35 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, PermissionsAndroid, Platform, AppState } from 'react-native';
+import { StyleSheet, View, Text, PermissionsAndroid, Platform, AppState, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { useFonts, InstrumentSerif_400Regular } from '@expo-google-fonts/instrument-serif';
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+} from '@expo-google-fonts/inter';
+
 import Dashboard from './src/screens/Dashboard';
-import Splitter from './src/screens/Splitter';
+import TransactionsScreen from './src/screens/TransactionsScreen';
+import AccountsScreen from './src/screens/AccountsScreen';
+import InsightsScreen from './src/screens/InsightsScreen';
 import ReviewQueue from './src/screens/ReviewQueue';
-import SMSIngestSimulator from './src/screens/SMSIngestSimulator';
+import SettingsScreen from './src/screens/SettingsScreen';
 import { initSmsListener, checkPendingBackgroundSms } from './src/engine/smsReceiver';
+import { Colors } from './src/theme/tokens';
 
 const Tab = createBottomTabNavigator();
 
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    InstrumentSerif_400Regular,
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+  });
+
   useEffect(() => {
     async function requestSmsPermissions() {
       if (Platform.OS === 'android') {
@@ -38,58 +57,51 @@ export default function App() {
       subscription.remove();
     };
   }, []);
+
+  if (!fontsLoaded) {
+    return (
+      <View style={{ flex: 1, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={Colors.accentLight} />
+      </View>
+    );
+  }
+
   return (
     <NavigationContainer>
       <Tab.Navigator
-        screenOptions={{
+        screenOptions={({ route }) => ({
           headerShown: false,
           tabBarStyle: {
-            backgroundColor: '#0f172a',
-            borderTopColor: '#334155',
+            backgroundColor: Colors.background,
+            borderTopColor: Colors.border,
             height: 64,
             paddingBottom: 8,
             paddingTop: 8,
           },
-          tabBarActiveTintColor: '#818cf8',
-          tabBarInactiveTintColor: '#64748b',
+          tabBarActiveTintColor: Colors.accentLight,
+          tabBarInactiveTintColor: Colors.textMuted,
           tabBarLabelStyle: {
+            fontFamily: 'Inter_600SemiBold',
             fontSize: 11,
-            fontWeight: '600',
           },
-        }}
+          tabBarIcon: ({ color, size }) => {
+            let iconName = '✦';
+            if (route.name === 'Home') iconName = '🏛️';
+            else if (route.name === 'Txns') iconName = '💳';
+            else if (route.name === 'Accounts') iconName = '🏦';
+            else if (route.name === 'Insights') iconName = '📊';
+            else if (route.name === 'Review') iconName = '⚡';
+            else if (route.name === 'Settings') iconName = '⚙️';
+            return <Text style={{ fontSize: 16 }}>{iconName}</Text>;
+          },
+        })}
       >
-        <Tab.Screen
-          name="Dashboard"
-          component={Dashboard}
-          options={{
-            tabBarLabel: 'Ledger',
-            tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>📊</Text>,
-          }}
-        />
-        <Tab.Screen
-          name="Splitter"
-          component={Splitter}
-          options={{
-            tabBarLabel: 'Splitwise',
-            tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>👥</Text>,
-          }}
-        />
-        <Tab.Screen
-          name="ReviewQueue"
-          component={ReviewQueue}
-          options={{
-            tabBarLabel: 'Review',
-            tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>⚠️</Text>,
-          }}
-        />
-        <Tab.Screen
-          name="SMSIngestSimulator"
-          component={SMSIngestSimulator}
-          options={{
-            tabBarLabel: 'SMS Lab',
-            tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>📲</Text>,
-          }}
-        />
+        <Tab.Screen name="Home" component={Dashboard} />
+        <Tab.Screen name="Txns" component={TransactionsScreen} options={{ title: 'Transactions' }} />
+        <Tab.Screen name="Accounts" component={AccountsScreen} />
+        <Tab.Screen name="Insights" component={InsightsScreen} />
+        <Tab.Screen name="Review" component={ReviewQueue} />
+        <Tab.Screen name="Settings" component={SettingsScreen} />
       </Tab.Navigator>
     </NavigationContainer>
   );

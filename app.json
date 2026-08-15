@@ -16,13 +16,11 @@
         "READ_SMS"
       ]
     },
+    "ios": {
+      "bundleIdentifier": "com.personal.gmailtxnparser"
+    },
     "plugins": [
-      [
-        "llama.rn",
-        {
-          "enableOpenCL": true
-        }
-      ]
+      "expo-font"
     ]
   }
 }
