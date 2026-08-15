@@ -19,6 +19,16 @@ class SmsModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
     }
 
     @ReactMethod
+    fun addListener(eventName: String?) {
+        // Required for NativeEventEmitter
+    }
+
+    @ReactMethod
+    fun removeListeners(count: Int?) {
+        // Required for NativeEventEmitter
+    }
+
+    @ReactMethod
     fun getPendingSms(promise: Promise) {
         try {
             val prefs = reactApplicationContext.getSharedPreferences("sms_queue_prefs", Context.MODE_PRIVATE)
