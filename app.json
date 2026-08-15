@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "GmailTxnParserAndroid",
+    "slug": "gmail-txn-parser-android",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0f172a"
+    },
+    "android": {
+      "package": "com.personal.gmailtxnparser",
+      "permissions": [
+        "RECEIVE_SMS",
+        "READ_SMS"
+      ]
+    },
+    "plugins": [
+      [
+        "llama.rn",
+        {
+          "enableOpenCL": true
+        }
+      ]
+    ]
+  }
+}

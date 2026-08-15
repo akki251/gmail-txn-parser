@@ -1,7 +1,8 @@
 {
-  "name": "gmail-txn-parser",
-  "version": "0.1.0",
-  "description": "Watches Gmail (and SMS via an iOS Shortcut) for bank transaction alerts, parses them, categorizes spend, and splits expenses with friends via a self-hosted PWA.",
+  "name": "gmail-txn-parser-android",
+  "version": "1.0.0",
+  "description": "Fully local, offline-first, private Android app built with Expo, llama.rn local LLM fallback, and deterministic bank SMS parsers.",
+  "main": "index.js",
   "license": "MIT",
   "author": "akki251",
   "repository": {
@@ -10,18 +11,35 @@
   },
   "private": true,
   "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "prebuild": "expo prebuild",
     "test": "node test.js",
-    "test:split": "node test-split-flow.js",
     "test:sms": "node test-sms.js",
     "test:nontransactional": "node test-nontransactional.js",
-    "test:stats": "node test-pipeline-stats.js",
-    "test:matching": "node test-matching-engine.js",
-    "test:dedup": "node test-dedup-integration.js",
-    "fetch": "node fetchAndParse.js",
-    "cli": "node cli.js",
     "serve": "node server.js"
   },
+  "trustedDependencies": [
+    "llama.rn"
+  ],
   "dependencies": {
-    "googleapis": "^144.0.0"
+    "@react-navigation/bottom-tabs": "^6.5.11",
+    "@react-navigation/native": "^6.1.9",
+    "expo": "~50.0.0",
+    "expo-crypto": "~12.8.0",
+    "expo-file-system": "~16.0.0",
+    "expo-status-bar": "~1.11.1",
+    "googleapis": "^144.0.0",
+    "llama.rn": "^0.3.0",
+    "lucide-react-native": "^0.300.0",
+    "react": "18.2.0",
+    "react-native": "0.73.4",
+    "react-native-safe-area-context": "4.8.2",
+    "react-native-screens": "~3.29.0",
+    "react-native-svg": "14.1.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.20.0"
   }
 }
