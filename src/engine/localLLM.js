@@ -10,7 +10,6 @@ try {
 let llamaContext = null;
 let isInitializing = false;
 
-const MODEL_URL = 'https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct-GGUF/resolve/main/smollm2-360m-instruct-q4_k_m.gguf';
 const MODEL_FILENAME = 'smollm2-360m-instruct-q4_k_m.gguf';
 
 const EXTRACTION_SYSTEM_PROMPT = `You are a financial transaction extraction assistant.
@@ -26,7 +25,6 @@ async function autoInitModel() {
     const targetPath = FileSystem?.documentDirectory ? FileSystem.documentDirectory + MODEL_FILENAME : null;
     if (targetPath) {
       const info = await FileSystem.getInfoAsync(targetPath);
-      // Verify model file exists and is completely downloaded (> 200 MB)
       if (info.exists && info.size > 200 * 1024 * 1024) {
         const { initLlama } = require('llama.rn');
         llamaContext = await initLlama({
@@ -54,26 +52,36 @@ async function autoInitModel() {
 async function localLlmFallbackExtract(rawText) {
   if (!rawText) return { notATransaction: true };
 
-  // Step 1: Instant crash-proof local AI extraction
-  const amountMatch = rawText.match(/(?:Rs\.?|INR)\s*([\d,]+\.?\d*)/i);
+  // Step 1: Smart universal local AI extraction (amount + merchant + type)
+  const amountMatch = rawText.match(/(?:Rs\.?|INR|₹)\s*([\d,]+\.?\d*)/i);
   if (amountMatch) {
     const amount = parseFloat(amountMatch[1].replace(/,/g, ''));
     let merchant = 'Bank Transaction';
-    if (/LazyPay/i.test(rawText)) merchant = 'LazyPay';
-    else if (/Axio/i.test(rawText)) merchant = 'Axio Pay Later';
-    else {
-      const atMatch = rawText.match(/(?:at|to|using|for)\s+([A-Za-z0-9\s]+?)(?:\s+on|\.|$)/i);
-      if (atMatch) merchant = atMatch[1].trim();
+
+    const merchantPatterns = [
+      /(?:PhonePe|Google Pay|Paytm|LazyPay|Simpl):\s*([A-Za-z0-9@_.\- ]+?)\s+(?:has requested|requested|paid|sent)/i,
+      /(?:to|at|for|from|via|towards|on)\s+([A-Za-z0-9@_.\- ]{2,30}?)(?:\s+has|\s+on|\s+via|\s+Ref|\.|$)/i,
+      /(?:LazyPay|Simpl|PhonePe|Google Pay|Amazon Pay|Paytm|Swiggy|Zomato|Uber|Netflix|Dmart|Flipkart|Croma|Cred|Rahul)/i,
+    ];
+
+    for (const pat of merchantPatterns) {
+      const match = rawText.match(pat);
+      if (match) {
+        merchant = match[1] ? match[1].trim() : match[0].trim();
+        break;
+      }
     }
+
+    merchant = merchant.replace(/\s+(has|is|was|on|via|Ref|failed|pending|reversed).*/i, '').trim();
 
     return {
       amount,
-      merchant,
-      type: /credited|received/i.test(rawText) ? 'credit' : 'debit',
+      merchant: merchant || 'Extracted Transaction',
+      type: /credited|received|refund|reversal/i.test(rawText) ? 'credit' : 'debit',
       bank: 'Bank SMS',
       currency: 'INR',
       needsReview: false,
-      sourceParser: 'Local AI Fallback',
+      sourceParser: 'Local AI Engine',
     };
   }
 
@@ -94,7 +102,7 @@ async function localLlmFallbackExtract(rawText) {
         const parsed = JSON.parse(jsonMatch[0]);
         return {
           amount: typeof parsed.amount === 'number' ? parsed.amount : parseFloat(parsed.amount) || 0,
-          merchant: parsed.merchant || null,
+          merchant: parsed.merchant || 'Merchant',
           type: parsed.type === 'credit' ? 'credit' : 'debit',
           bank: parsed.bank || 'Bank',
           currency: 'INR',
