@@ -86,6 +86,30 @@ export async function checkPendingBackgroundSms() {
 }
 
 /**
+ * Sync system SMS inbox to catch messages delivered while device was powered off
+ */
+export async function syncInboxSms(daysAgo = 30) {
+  if (NativeModules.SmsReceiver && NativeModules.SmsReceiver.readInboxSms) {
+    try {
+      const sinceTimestamp = Date.now() - (daysAgo * 24 * 60 * 60 * 1000);
+      const inboxList = await NativeModules.SmsReceiver.readInboxSms(sinceTimestamp);
+      if (Array.isArray(inboxList) && inboxList.length > 0) {
+        console.log(`[SMS Ingest Bridge] Syncing ${inboxList.length} inbox SMS items...`);
+        for (const item of inboxList) {
+          await processIncomingSms({
+            sender: item.sender || 'SMS',
+            text: item.body || '',
+            date: item.timestamp ? new Date(item.timestamp).toISOString() : new Date().toISOString(),
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('[SMS Ingest Bridge] Inbox SMS sync error:', err);
+    }
+  }
+}
+
+/**
  * Start listening for native SMS events
  */
 export function initSmsListener(onTransactionAdded) {
@@ -93,8 +117,8 @@ export function initSmsListener(onTransactionAdded) {
     listenerSubscription = DeviceEventEmitter.addListener('TRANSACTION_ADDED', onTransactionAdded);
   }
 
-  // Drain background SMS queue captured while app was closed
-  checkPendingBackgroundSms();
+  // Drain background SMS queue + sync inbox for power-off recovery
+  checkPendingBackgroundSms().then(() => syncInboxSms());
 
   // Listen for native Android SMS broadcast events if bridge is present
   const smsNativeEmitter = NativeModules.SmsReceiver ? new NativeEventEmitter(NativeModules.SmsReceiver) : DeviceEventEmitter;

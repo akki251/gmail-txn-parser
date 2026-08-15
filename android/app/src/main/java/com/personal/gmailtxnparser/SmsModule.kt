@@ -1,6 +1,7 @@
 package com.personal.gmailtxnparser
 
 import android.content.Context
+import android.net.Uri
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -36,6 +37,40 @@ class SmsModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
             promise.resolve(true)
         } catch (e: Exception) {
             promise.reject("SMS_CLEAR_ERROR", e.message)
+        }
+    }
+
+    @ReactMethod
+    fun readInboxSms(sinceTimestamp: Double, promise: Promise) {
+        try {
+            val uri = Uri.parse("content://sms/inbox")
+            val selection = "date > ?"
+            val selectionArgs = arrayOf(sinceTimestamp.toLong().toString())
+            val cursor = reactApplicationContext.contentResolver.query(
+                uri,
+                arrayOf("address", "body", "date"),
+                selection,
+                selectionArgs,
+                "date DESC"
+            )
+
+            val array = Arguments.createArray()
+            cursor?.use { c ->
+                val addressIdx = c.getColumnIndex("address")
+                val bodyIdx = c.getColumnIndex("body")
+                val dateIdx = c.getColumnIndex("date")
+
+                while (c.moveToNext()) {
+                    val map = Arguments.createMap()
+                    map.putString("sender", if (addressIdx != -1) c.getString(addressIdx) else "SMS")
+                    map.putString("body", if (bodyIdx != -1) c.getString(bodyIdx) else "")
+                    map.putDouble("timestamp", if (dateIdx != -1) c.getLong(dateIdx).toDouble() else 0.0)
+                    array.pushMap(map)
+                }
+            }
+            promise.resolve(array)
+        } catch (e: Exception) {
+            promise.reject("INBOX_READ_ERROR", e.message)
         }
     }
 
