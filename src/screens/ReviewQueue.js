@@ -12,6 +12,8 @@ import {
 import db from '../store/db';
 import { localLlmFallbackExtract } from '../engine/localLLM';
 
+import { DeviceEventEmitter } from 'react-native';
+
 export default function ReviewQueue() {
   const [queue, setQueue] = useState([]);
   const [editingTxn, setEditingTxn] = useState(null);
@@ -21,6 +23,10 @@ export default function ReviewQueue() {
 
   useEffect(() => {
     loadQueue();
+    const subscription = DeviceEventEmitter.addListener('TRANSACTION_ADDED', () => {
+      loadQueue();
+    });
+    return () => subscription.remove();
   }, []);
 
   const loadQueue = async () => {

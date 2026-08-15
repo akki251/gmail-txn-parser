@@ -13,6 +13,8 @@ import {
 } from 'react-native';
 import db from '../store/db';
 
+import { DeviceEventEmitter } from 'react-native';
+
 export default function Dashboard() {
   const [transactions, setTransactions] = useState([]);
   const [selectedFilter, setSelectedFilter] = useState('All');
@@ -21,6 +23,10 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadData();
+    const subscription = DeviceEventEmitter.addListener('TRANSACTION_ADDED', () => {
+      loadData();
+    });
+    return () => subscription.remove();
   }, []);
 
   const loadData = async () => {
