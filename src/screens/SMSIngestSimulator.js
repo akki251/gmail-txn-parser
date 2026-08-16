@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
   },
   resultJson: {
     color: '#cbd5e1',
-    fontFamily: 'monospace',
+    fontFamily: 'Gilroy_Medium',
     fontSize: 12,
   },
 });

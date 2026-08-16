@@ -1,18 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import {
-  StyleSheet,
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  TextInput,
-  SafeAreaView,
-  Alert,
-} from 'react-native';
+import { StyleSheet, View, Alert, DeviceEventEmitter } from 'react-native';
+import Animated, { FadeInUp } from 'react-native-reanimated';
 import db from '../store/db';
 import { localLlmFallbackExtract } from '../engine/localLLM';
-
-import { DeviceEventEmitter } from 'react-native';
+import { colors, radius, spacing } from '../design';
+import { ScreenContainer, Stack, Row } from '../components/primitives/Layout';
+import { Heading, BodyText, Caption } from '../components/primitives/Text';
+import { ThinDivider } from '../components/primitives/Surfaces';
+import { Button, Input } from '../components/primitives/Controls';
+import { ScrollView } from 'react-native';
 
 export default function ReviewQueue() {
   const [queue, setQueue] = useState([]);
@@ -72,207 +68,133 @@ export default function ReviewQueue() {
     await loadQueue();
   };
 
-  const renderQueueItem = ({ item }) => (
-    <View style={styles.card}>
-      <Text style={styles.rawTextHeader}>Raw Unparsed Payload:</Text>
-      <Text style={styles.rawText}>{item.rawText || item.text || 'Unknown payload'}</Text>
-      <Text style={styles.parserBadge}>Parser: {item.sourceParser || 'None'}</Text>
+  const renderQueueItem = (item, index) => (
+    <Animated.View key={item.id} entering={FadeInUp.delay(index * 40).duration(350)}>
+      <View style={styles.card}>
+        <Stack space={spacing.xs}>
+          <Heading level={3} style={{ letterSpacing: 0, fontSize: 20 }}>{item.merchant || 'Unknown Merchant'}</Heading>
+          <BodyText style={{ fontSize: 18, color: colors.textPrimary }}>
+            {item.type === 'credit' ? '+' : '−'}₹{item.amount || '0'}
+          </BodyText>
+          <Caption style={{ marginTop: 2, textTransform: 'none', letterSpacing: 0, color: colors.textSecondary }}>
+            Detected as {item.category || item.bank || 'Transaction'}
+          </Caption>
+        </Stack>
 
-      {editingTxn?.id === item.id ? (
-        <View style={styles.editContainer}>
-          <TextInput
-            style={styles.input}
-            placeholder="Amount (e.g. 499)"
-            placeholderTextColor="#64748b"
-            keyboardType="numeric"
-            value={editAmount}
-            onChangeText={setEditAmount}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Merchant Name"
-            placeholderTextColor="#64748b"
-            value={editMerchant}
-            onChangeText={setEditMerchant}
-          />
-          <View style={styles.actionRow}>
-            <TouchableOpacity style={styles.saveBtn} onPress={() => handleSaveManual(item)}>
-              <Text style={styles.btnText}>Save</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.cancelBtn} onPress={() => setEditingTxn(null)}>
-              <Text style={styles.btnText}>Cancel</Text>
-            </TouchableOpacity>
+        {editingTxn?.id === item.id ? (
+          <View style={styles.editContainer}>
+            <Stack space={spacing.md}>
+              <Input
+                placeholder="Amount (e.g. 499)"
+                keyboardType="numeric"
+                value={editAmount}
+                onChangeText={setEditAmount}
+              />
+              <Input
+                placeholder="Merchant Name"
+                value={editMerchant}
+                onChangeText={setEditMerchant}
+              />
+              <Row>
+                <Button title="Cancel" variant="ghost" onPress={() => setEditingTxn(null)} style={{ flex: 1 }} />
+                <Button title="Save" variant="primary" onPress={() => handleSaveManual(item)} style={{ flex: 1 }} />
+              </Row>
+            </Stack>
           </View>
-        </View>
-      ) : (
-        <View style={styles.actionRow}>
-          <TouchableOpacity
-            style={styles.aiRetryBtn}
-            onPress={() => handleRetryLocalLlm(item)}
-            disabled={isProcessingModel}
-          >
-            <Text style={styles.btnText}>
-              {isProcessingModel ? 'Running LLM...' : '⚡ Retry Local AI'}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.manualBtn}
-            onPress={() => {
-              setEditingTxn(item);
-              setEditAmount(item.amount ? String(item.amount) : '');
-              setEditMerchant(item.merchant || '');
-            }}
-          >
-            <Text style={styles.btnText}>Edit Manually</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
+        ) : (
+          <Row style={styles.actionRow} space={spacing.sm}>
+            <Button 
+              title="Confirm" 
+              variant="primary" 
+              onPress={() => handleSaveManual({ ...item, amount: item.amount || 0, merchant: item.merchant || 'Confirmed' })} 
+              style={{ flex: 1 }} 
+            />
+            <Button 
+              title="Edit" 
+              variant="ghost" 
+              onPress={() => {
+                setEditingTxn(item);
+                setEditAmount(item.amount ? String(item.amount) : '');
+                setEditMerchant(item.merchant || '');
+              }} 
+              style={{ flex: 1 }} 
+            />
+          </Row>
+        )}
+      </View>
+      <ThinDivider margin={0} style={{ marginHorizontal: spacing.xl, width: 'auto' }} />
+    </Animated.View>
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Review Queue</Text>
-        <Text style={styles.headerSubtitle}>
-          Zero silent drops — resolve unparsed SMS
-        </Text>
-      </View>
+    <ScreenContainer>
+      <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
+        <View style={styles.header}>
+          <Heading level={1} style={{ marginBottom: spacing.sm }}>Needs your attention</Heading>
+          <BodyText style={{ fontSize: 17 }}>
+            {queue.length} {queue.length === 1 ? 'transaction' : 'transactions'}
+          </BodyText>
+          <BodyText color={colors.textSecondary} style={styles.subtitle}>
+            These transactions need confirmation before being added to your finances.
+          </BodyText>
+        </View>
 
-      <FlatList
-        data={queue}
-        keyExtractor={(item) => item.id}
-        renderItem={renderQueueItem}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>Queue is empty 🎉</Text>
-            <Text style={styles.emptySubtext}>
-              All incoming bank SMS were parsed with high confidence.
-            </Text>
-          </View>
-        }
-      />
-    </SafeAreaView>
+        <View style={styles.listContainer}>
+          {queue.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Heading level={2} style={styles.emptyText}>Nothing here yet</Heading>
+              <BodyText color={colors.textSecondary} style={styles.emptySubtext}>
+                All incoming bank SMS were parsed with high confidence.
+              </BodyText>
+            </View>
+          ) : (
+            queue.map((item, index) => renderQueueItem(item, index))
+          )}
+        </View>
+      </ScrollView>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0f172a',
-  },
   header: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 10,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xxxl,
+    paddingBottom: spacing.xl,
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#f8fafc',
+  subtitle: {
+    lineHeight: 24,
+    marginTop: spacing.sm,
   },
-  headerSubtitle: {
-    fontSize: 13,
-    color: '#94a3b8',
-    marginTop: 2,
-  },
-  listContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
+  listContainer: {
+    backgroundColor: colors.surface,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
   },
   card: {
-    backgroundColor: '#1e293b',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  rawTextHeader: {
-    fontSize: 11,
-    color: '#fbbf24',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  rawText: {
-    fontSize: 13,
-    color: '#f8fafc',
-    marginTop: 6,
-    fontFamily: 'monospace',
-    backgroundColor: '#0f172a',
-    padding: 10,
-    borderRadius: 8,
-  },
-  parserBadge: {
-    fontSize: 11,
-    color: '#94a3b8',
-    marginTop: 8,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xl,
   },
   actionRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 12,
-  },
-  aiRetryBtn: {
-    flex: 1,
-    backgroundColor: '#6366f1',
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  manualBtn: {
-    flex: 1,
-    backgroundColor: '#334155',
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  saveBtn: {
-    flex: 1,
-    backgroundColor: '#10b981',
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  cancelBtn: {
-    flex: 1,
-    backgroundColor: '#f43f5e',
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  btnText: {
-    color: '#ffffff',
-    fontWeight: '700',
-    fontSize: 13,
+    marginTop: spacing.lg,
   },
   editContainer: {
-    marginTop: 12,
-    gap: 10,
-  },
-  input: {
-    backgroundColor: '#0f172a',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    color: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#334155',
+    marginTop: spacing.lg,
+    padding: spacing.lg,
+    backgroundColor: colors.background,
+    borderRadius: radius.small,
   },
   emptyContainer: {
     alignItems: 'center',
-    paddingVertical: 80,
+    paddingVertical: spacing.huge * 2,
+    paddingHorizontal: spacing.xl,
   },
   emptyText: {
-    fontSize: 18,
-    color: '#f8fafc',
-    fontWeight: '700',
+    marginBottom: spacing.sm,
   },
   emptySubtext: {
-    fontSize: 13,
-    color: '#64748b',
-    marginTop: 6,
     textAlign: 'center',
+    lineHeight: 22,
   },
 });

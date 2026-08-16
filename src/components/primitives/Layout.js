@@ -1,17 +1,17 @@
 import React from 'react';
 import { View, StyleSheet, SafeAreaView, StatusBar } from 'react-native';
-import { Colors, Spacing } from '../../theme/tokens';
+import { colors, spacing } from '../../design';
 
 export function ScreenContainer({ children, style, ...props }) {
   return (
     <SafeAreaView style={[styles.screen, style]} {...props}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
+      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
       {children}
     </SafeAreaView>
   );
 }
 
-export function Stack({ children, space = Spacing.md, style, ...props }) {
+export function Stack({ children, space = spacing.md, style, ...props }) {
   return (
     <View style={[{ gap: space }, style]} {...props}>
       {children}
@@ -19,7 +19,7 @@ export function Stack({ children, space = Spacing.md, style, ...props }) {
   );
 }
 
-export function Row({ children, align = 'center', justify = 'space-between', space = Spacing.md, style, ...props }) {
+export function Row({ children, align = 'center', justify = 'space-between', space = spacing.md, style, ...props }) {
   return (
     <View style={[styles.row, { alignItems: align, justifyContent: justify, gap: space }, style]} {...props}>
       {children}
@@ -38,12 +38,12 @@ export function Section({ children, style, ...props }) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   row: {
     flexDirection: 'row',
   },
   section: {
-    marginBottom: Spacing.xl,
+    marginBottom: spacing.xl,
   },
 });

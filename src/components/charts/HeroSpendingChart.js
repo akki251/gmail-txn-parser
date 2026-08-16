@@ -1,141 +1,77 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, TouchableWithoutFeedback, Dimensions } from 'react-native';
-import Svg, { Path, Defs, LinearGradient, Stop, Circle, Line } from 'react-native-svg';
-import { Colors, Radius, Spacing } from '../../theme/tokens';
-import { BodyText, Caption } from '../primitives/Text';
+import React, { useEffect, useMemo } from 'react';
+import { Dimensions, StyleSheet, View } from 'react-native';
+import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop } from 'react-native-svg';
+import Animated, { Easing, useAnimatedProps, useSharedValue, withTiming } from 'react-native-reanimated';
+import { colors, spacing } from '../../design';
+import { Caption } from '../primitives/Text';
 
-const SCREEN_WIDTH = Dimensions.get('window').width - 64; // Account for card padding & margins
+const AnimatedPath = Animated.createAnimatedComponent(Path);
+const CHART_HEIGHT = 118;
+const CHART_WIDTH = Dimensions.get('window').width - (spacing.xl * 2) - 36;
+
+function usableDate(transaction) {
+  if (!transaction.date || transaction.date === 'Today') return new Date();
+  const date = new Date(transaction.date || transaction.rawDate);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
 
 export default function HeroSpendingChart({ transactions = [] }) {
-  const [selectedIndex, setSelectedIndex] = useState(null);
+  const reveal = useSharedValue(0);
+  const points = useMemo(() => {
+    const now = new Date();
+    const totals = {};
+    transactions
+      .filter((item) => item.type === 'debit' && !item.notATransaction && Number(item.amount) > 0)
+      .forEach((item) => {
+        const date = usableDate(item);
+        if (!date || date.getMonth() !== now.getMonth() || date.getFullYear() !== now.getFullYear()) return;
+        const day = date.getDate();
+        totals[day] = (totals[day] || 0) + Number(item.amount);
+      });
+    let total = 0;
+    return Object.keys(totals).map(Number).sort((a, b) => a - b).map((day) => {
+      total += totals[day];
+      return { day, value: total };
+    });
+  }, [transactions]);
 
-  // Filter valid spend debits
-  const debits = transactions.filter((t) => t.type === 'debit' && !t.notATransaction && t.amount > 0);
+  const path = useMemo(() => {
+    if (!points.length) return null;
+    const maxValue = Math.max(...points.map((point) => point.value), 1);
+    const usableHeight = CHART_HEIGHT - 32;
+    const horizontalSpace = Math.max(CHART_WIDTH - 8, 1);
+    const plotted = points.map((point, index) => ({
+      ...point,
+      x: points.length === 1 ? horizontalSpace / 2 : (horizontalSpace / (points.length - 1)) * index + 4,
+      y: CHART_HEIGHT - 21 - ((point.value / maxValue) * usableHeight),
+    }));
+    const line = plotted.reduce((result, point, index) => `${result}${index === 0 ? 'M' : ' L'} ${point.x} ${point.y}`, '');
+    return { plotted, line, fill: `${line} L ${plotted[plotted.length - 1].x} ${CHART_HEIGHT - 13} L ${plotted[0].x} ${CHART_HEIGHT - 13} Z` };
+  }, [points]);
 
-  if (debits.length === 0) {
-    return (
-      <View style={styles.emptyChart}>
-        <Caption style={{ textAlign: 'center' }}>No spending data recorded yet</Caption>
-      </View>
-    );
-  }
+  useEffect(() => {
+    reveal.value = 0;
+    reveal.value = withTiming(1, { duration: 650, easing: Easing.out(Easing.cubic) });
+  }, [path?.line]);
 
-  // Create 7 data points for chart representation
-  const chartPoints = debits.slice(-7).map((t, idx) => ({
-    x: (SCREEN_WIDTH / 6) * idx,
-    amount: t.amount,
-    label: t.merchant || 'Bank',
-  }));
+  const animatedProps = useAnimatedProps(() => ({ strokeDashoffset: (1 - reveal.value) * (CHART_WIDTH * 1.5) }));
 
-  const maxAmt = Math.max(...chartPoints.map((p) => p.amount), 1);
-  const minAmt = Math.min(...chartPoints.map((p) => p.amount), 0);
-  const height = 120;
+  if (!path) return <View style={styles.empty}><Caption style={styles.emptyText}>No spending recorded this month</Caption></View>;
 
-  // Convert points to SVG Y coordinates
-  const normalizedPoints = chartPoints.map((p) => {
-    const y = height - ((p.amount - minAmt) / (maxAmt - minAmt || 1)) * (height - 20) - 10;
-    return { ...p, y };
-  });
-
-  // Construct SVG Path
-  let pathD = `M ${normalizedPoints[0].x} ${normalizedPoints[0].y}`;
-  for (let i = 1; i < normalizedPoints.length; i++) {
-    const prev = normalizedPoints[i - 1];
-    const curr = normalizedPoints[i];
-    const cx = (prev.x + curr.x) / 2;
-    pathD += ` C ${cx} ${prev.y}, ${cx} ${curr.y}, ${curr.x} ${curr.y}`;
-  }
-
-  const fillD = `${pathD} L ${normalizedPoints[normalizedPoints.length - 1].x} ${height} L ${normalizedPoints[0].x} ${height} Z`;
-
-  const activePoint = selectedIndex !== null ? normalizedPoints[selectedIndex] : normalizedPoints[normalizedPoints.length - 1];
-
-  const handleTouch = (event) => {
-    const x = event.nativeEvent.locationX;
-    const closestIdx = Math.min(
-      normalizedPoints.length - 1,
-      Math.max(0, Math.round((x / SCREEN_WIDTH) * (normalizedPoints.length - 1)))
-    );
-    setSelectedIndex(closestIdx);
-  };
-
-  return (
-    <View style={styles.card}>
-      <View style={styles.chartHeader}>
-        <View>
-          <Caption color={Colors.accentLight}>Selected Expense</Caption>
-          <BodyText bold style={{ fontSize: 20, marginTop: 2 }}>
-            ₹{activePoint.amount.toLocaleString('en-IN')}
-          </BodyText>
-        </View>
-        <Caption style={{ alignSelf: 'flex-end' }}>{activePoint.label}</Caption>
-      </View>
-
-      <TouchableWithoutFeedback onPressIn={handleTouch} onPressOut={() => setSelectedIndex(null)}>
-        <View style={{ height, width: SCREEN_WIDTH, marginTop: 12 }}>
-          <Svg width={SCREEN_WIDTH} height={height}>
-            <Defs>
-              <LinearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0" stopColor={Colors.accent} stopOpacity="0.4" />
-                <Stop offset="1" stopColor={Colors.accent} stopOpacity="0.0" />
-              </LinearGradient>
-            </Defs>
-
-            <Path d={fillD} fill="url(#chartGrad)" />
-            <Path d={pathD} fill="none" stroke={Colors.accentLight} strokeWidth="3" />
-
-            {/* Vertical Guide Line */}
-            {activePoint && (
-              <Line
-                x1={activePoint.x}
-                y1={0}
-                x2={activePoint.x}
-                y2={height}
-                stroke={Colors.borderLight}
-                strokeWidth="1"
-                strokeDasharray="4, 4"
-              />
-            )}
-
-            {/* Active Point Highlight Circle */}
-            {activePoint && (
-              <Circle
-                cx={activePoint.x}
-                cy={activePoint.y}
-                r="6"
-                fill={Colors.accentLight}
-                stroke={Colors.background}
-                strokeWidth="2"
-              />
-            )}
-          </Svg>
-        </View>
-      </TouchableWithoutFeedback>
-    </View>
-  );
+  const shownLabels = path.plotted.filter((point, index) => index === 0 || index === path.plotted.length - 1 || index === Math.floor(path.plotted.length / 2));
+  return <View style={styles.container} accessible accessibilityLabel="Cumulative spending trend for this month">
+    <Svg width={CHART_WIDTH} height={CHART_HEIGHT}>
+      <Defs><LinearGradient id="spendingFade" x1="0" y1="0" x2="0" y2="1"><Stop offset="0" stopColor="#E8E7FF" stopOpacity="0.9" /><Stop offset="1" stopColor="#E8E7FF" stopOpacity="0" /></LinearGradient></Defs>
+      <Line x1="0" y1={CHART_HEIGHT - 13} x2={CHART_WIDTH} y2={CHART_HEIGHT - 13} stroke={colors.border} strokeWidth="1" />
+      <Line x1="0" y1={CHART_HEIGHT / 2} x2={CHART_WIDTH} y2={CHART_HEIGHT / 2} stroke={colors.border} strokeWidth="1" strokeDasharray="3 5" />
+      <Path d={path.fill} fill="url(#spendingFade)" />
+      <AnimatedPath d={path.line} fill="none" stroke={colors.primary} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={CHART_WIDTH * 1.5} animatedProps={animatedProps} />
+      {path.plotted.length === 1 && <Circle cx={path.plotted[0].x} cy={path.plotted[0].y} r="4" fill={colors.primary} stroke={colors.white} strokeWidth="2" />}
+    </Svg>
+    <View style={styles.labels}>{shownLabels.map((point) => <Caption key={point.day} style={[styles.label, { left: Math.max(0, Math.min(point.x - 10, CHART_WIDTH - 20)) }]}>{point.day}</Caption>)}</View>
+  </View>;
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.large,
-    padding: Spacing.lg,
-    marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  chartHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  emptyChart: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.large,
-    padding: Spacing.xl,
-    marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
+  container: { height: 142, marginTop: spacing.sm }, empty: { height: 142, alignItems: 'center', justifyContent: 'center' }, emptyText: { color: colors.textMuted, textTransform: 'none', letterSpacing: 0 }, labels: { position: 'absolute', left: 0, right: 0, bottom: 1, height: 16 }, label: { position: 'absolute', color: colors.textMuted, fontSize: 9 },
 });

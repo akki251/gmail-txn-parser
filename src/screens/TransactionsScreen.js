@@ -2,20 +2,22 @@ import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
-  Text,
-  FlatList,
   TouchableOpacity,
   Modal,
-  ScrollView,
   RefreshControl,
   DeviceEventEmitter,
 } from 'react-native';
 import db from '../store/db';
-import { ScreenContainer, Stack, Row, Section } from '../components/primitives/Layout';
+import { ScreenContainer, Row, Stack } from '../components/primitives/Layout';
 import { Heading, BodyText, Caption, DisplayText } from '../components/primitives/Text';
-import { Card, ThinDivider } from '../components/primitives/Surfaces';
+import { ThinDivider } from '../components/primitives/Surfaces';
 import { Input, Button } from '../components/primitives/Controls';
-import { Colors, Radius, Spacing } from '../theme/tokens';
+import { Pill } from '../components/primitives/Chip';
+import { colors, radius, spacing } from '../design';
+import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
+import { TransactionRow } from '../components/primitives/TransactionRow';
+import { Feather } from '@expo/vector-icons';
+import { ScrollView } from 'react-native';
 
 export default function TransactionsScreen() {
   const [transactions, setTransactions] = useState([]);
@@ -44,164 +46,150 @@ export default function TransactionsScreen() {
 
   const availableBanks = ['All', ...new Set(transactions.map((t) => t.bank).filter(Boolean))];
 
-  const filteredTxns = transactions.filter((t) => {
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchM = (t.merchant || '').toLowerCase().includes(q);
-      const matchB = (t.bank || '').toLowerCase().includes(q);
-      const matchR = (t.rawText || '').toLowerCase().includes(q);
-      if (!matchM && !matchB && !matchR) return false;
-    }
-    if (typeFilter === 'Debit' && t.type !== 'debit') return false;
-    if (typeFilter === 'Credit' && t.type !== 'credit') return false;
-    if (typeFilter === 'Needs Review' && !t.needsReview) return false;
-    if (bankFilter !== 'All' && t.bank !== bankFilter) return false;
-    return true;
-  });
+  const filteredTxns = React.useMemo(() => {
+    return transactions.filter((t) => {
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchM = (t.merchant || '').toLowerCase().includes(q);
+        const matchB = (t.bank || '').toLowerCase().includes(q);
+        const matchR = (t.rawText || '').toLowerCase().includes(q);
+        if (!matchM && !matchB && !matchR) return false;
+      }
+      if (typeFilter === 'Debit' && t.type !== 'debit') return false;
+      if (typeFilter === 'Credit' && t.type !== 'credit') return false;
+      if (typeFilter === 'Needs Review' && !t.needsReview) return false;
+      if (bankFilter !== 'All' && t.bank !== bankFilter) return false;
+      return true;
+    });
+  }, [transactions, searchQuery, typeFilter, bankFilter]);
 
-  const renderItem = ({ item }) => {
-    const isDebit = item.type === 'debit';
-    const amountColor = isDebit ? Colors.negative : Colors.positive;
-    const formattedAmount = `${isDebit ? '-' : '+'}₹${Number(item.amount || 0).toLocaleString('en-IN')}`;
-
+  const renderItem = React.useCallback(({ item, index }) => {
     return (
-      <Card style={styles.txnCard} onPress={() => setSelectedTxn(item)}>
-        <Row>
-          <View style={[styles.avatar, { backgroundColor: isDebit ? Colors.negativeMuted : Colors.positiveMuted }]}>
-            <Text style={[styles.avatarText, { color: amountColor }]}>
-              {item.merchant ? item.merchant.charAt(0).toUpperCase() : '₹'}
-            </Text>
-          </View>
-
-          <View style={{ flex: 1 }}>
-            <BodyText bold numberOfLines={1}>{item.merchant || item.sourceParser || 'Bank Transaction'}</BodyText>
-            <BodyText small color={Colors.textMuted}>{item.bank || 'Bank'} • {item.instrument || 'SMS Alert'}</BodyText>
-          </View>
-
-          <View style={{ alignItems: 'flex-end' }}>
-            <BodyText bold style={{ color: amountColor }}>{formattedAmount}</BodyText>
-            {item.needsReview && (
-              <View style={styles.reviewBadge}>
-                <Caption color={Colors.warning}>Needs Review</Caption>
-              </View>
-            )}
-          </View>
-        </Row>
-      </Card>
+      <Animated.View
+        entering={FadeInDown.delay(Math.min(index * 40, 400))}
+        layout={LinearTransition}
+      >
+        <TransactionRow item={item} onPress={() => setSelectedTxn(item)} />
+        {index < filteredTxns.length - 1 && <ThinDivider margin={0} style={{ marginHorizontal: spacing.lg, width: 'auto' }} />}
+      </Animated.View>
     );
-  };
+  }, [filteredTxns.length]);
 
   return (
     <ScreenContainer>
       <View style={styles.header}>
-        <Heading level={1}>Transactions</Heading>
-        <Caption style={{ marginTop: 2 }}>{filteredTxns.length} records found</Caption>
+        <Row justify="space-between" align="center">
+          <Heading level={1}>Transactions</Heading>
+          <TouchableOpacity style={styles.filterButton}>
+            <Feather name="filter" size={20} color={colors.textPrimary} />
+          </TouchableOpacity>
+        </Row>
       </View>
 
-      <View style={{ paddingHorizontal: Spacing.lg, marginBottom: Spacing.md }}>
+      <View style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.md }}>
         <Input
-          placeholder="Search by merchant, bank, or text..."
+          placeholder="Search activity..."
           value={searchQuery}
           onChangeText={setSearchQuery}
-          icon="🔍"
+          icon={<Feather name="search" size={18} color={colors.textMuted} style={{ marginRight: spacing.sm }} />}
         />
       </View>
 
-      <View style={{ marginBottom: Spacing.sm }}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingHorizontal: Spacing.lg }}>
+      <View style={{ marginBottom: spacing.sm }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.sm }}>
           {['All', 'Debit', 'Credit', 'Needs Review'].map((filter) => (
-            <TouchableOpacity
+            <Pill
               key={filter}
-              style={[styles.pill, typeFilter === filter && styles.pillActive]}
+              label={filter}
+              active={typeFilter === filter}
               onPress={() => setTypeFilter(filter)}
-            >
-              <Text style={[styles.pillText, typeFilter === filter && styles.pillTextActive]}>{filter}</Text>
-            </TouchableOpacity>
+            />
           ))}
         </ScrollView>
       </View>
 
       {availableBanks.length > 2 && (
-        <View style={{ marginBottom: Spacing.md }}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingHorizontal: Spacing.lg }}>
+        <View style={{ marginBottom: spacing.md }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.sm }}>
             {availableBanks.map((bank) => (
-              <TouchableOpacity
+              <Pill
                 key={bank}
-                style={[styles.bankPill, bankFilter === bank && styles.bankPillActive]}
+                label={bank}
+                active={bankFilter === bank}
                 onPress={() => setBankFilter(bank)}
-              >
-                <Text style={[styles.bankPillText, bankFilter === bank && styles.bankPillTextActive]}>{bank}</Text>
-              </TouchableOpacity>
+                style={styles.bankPillSize}
+              />
             ))}
           </ScrollView>
         </View>
       )}
 
-      <FlatList
-        data={filteredTxns}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={{ paddingBottom: Spacing.xxl }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accentLight} />}
-        ListEmptyComponent={
-          <View style={styles.emptyBox}>
-            <BodyText bold style={{ textAlign: 'center' }}>No matching transactions</BodyText>
-            <BodyText small color={Colors.textMuted} style={{ textAlign: 'center', marginTop: 4 }}>
-              Try adjusting your search query or filters.
-            </BodyText>
-          </View>
-        }
-      />
+      {/* Flat edge-to-edge list */}
+      <View style={styles.listContainer}>
+        {filteredTxns.length > 0 && (
+          <Caption style={styles.dateHeader}>ALL TRANSACTIONS</Caption>
+        )}
+        <Animated.FlatList
+          data={filteredTxns}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          contentContainerStyle={{ paddingBottom: 100 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+          ListEmptyComponent={
+            <View style={styles.emptyBox}>
+              <BodyText bold style={{ textAlign: 'center' }}>No matching transactions</BodyText>
+              <BodyText small color={colors.textMuted} style={{ textAlign: 'center', marginTop: 4 }}>
+                Try adjusting your search query or filters.
+              </BodyText>
+            </View>
+          }
+        />
+      </View>
 
-      {/* Transaction Details Modal */}
+      {/* Transaction Details Modal will be redesigned in Phase 9 */}
       {selectedTxn && (
         <Modal transparent animationType="slide" visible={!!selectedTxn}>
           <View style={styles.modalOverlay}>
-            <Card elevated style={styles.modalCard}>
-              <Row>
-                <Heading level={2}>Details</Heading>
-                <TouchableOpacity onPress={() => setSelectedTxn(null)}>
-                  <BodyText color={Colors.textMuted}>✕</BodyText>
+            <View style={styles.modalSheet}>
+              <Row style={{ marginBottom: spacing.xl, alignItems: 'center' }}>
+                <Heading level={3}>Transaction Details</Heading>
+                <TouchableOpacity 
+                  onPress={() => setSelectedTxn(null)} 
+                  style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <BodyText style={{ color: colors.textSecondary, fontSize: 16, lineHeight: 18 }}>✕</BodyText>
                 </TouchableOpacity>
               </Row>
-
-              <View style={{ alignItems: 'center', marginVertical: Spacing.xl }}>
-                <DisplayText style={{ color: selectedTxn.type === 'debit' ? Colors.negative : Colors.positive }}>
-                  {selectedTxn.type === 'debit' ? '-' : '+'}₹{Number(selectedTxn.amount || 0).toLocaleString('en-IN')}
+              <View style={{ alignItems: 'center', marginBottom: spacing.xxxl }}>
+                <DisplayText style={{ color: selectedTxn.type === 'debit' ? colors.textPrimary : colors.income, fontSize: 48, lineHeight: 52 }}>
+                  {selectedTxn.type === 'debit' ? '−' : '+'}₹{Number(selectedTxn.amount || 0).toLocaleString('en-IN')}
                 </DisplayText>
-                <Heading level={2} style={{ marginTop: 4 }}>{selectedTxn.merchant || 'Bank Transaction'}</Heading>
+                <BodyText style={{ marginTop: spacing.sm, fontSize: 18, color: colors.textSecondary, textAlign: 'center' }}>
+                  {selectedTxn.merchant || 'Bank Transaction'}
+                </BodyText>
               </View>
 
-              <Stack space={Spacing.md}>
+              <Stack space={spacing.md} style={{ marginBottom: spacing.xl }}>
                 <Row>
                   <Caption>Bank</Caption>
-                  <BodyText bold small>{selectedTxn.bank || 'N/A'}</BodyText>
+                  <BodyText>{selectedTxn.bank || 'N/A'}</BodyText>
                 </Row>
                 <Row>
                   <Caption>Instrument</Caption>
-                  <BodyText bold small>{selectedTxn.instrument || 'SMS Alert'}</BodyText>
-                </Row>
-                <Row>
-                  <Caption>Source Parser</Caption>
-                  <BodyText bold small>{selectedTxn.sourceParser || 'Deterministic Regex'}</BodyText>
+                  <BodyText>{selectedTxn.instrument || 'SMS Alert'}</BodyText>
                 </Row>
                 <Row>
                   <Caption>Date</Caption>
-                  <BodyText bold small>{selectedTxn.date || 'Today'}</BodyText>
+                  <BodyText>
+                    {selectedTxn.date && selectedTxn.date !== 'Today' 
+                      ? new Date(selectedTxn.date).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) 
+                      : 'Today'}
+                  </BodyText>
                 </Row>
               </Stack>
-
-              {selectedTxn.rawText ? (
-                <View style={styles.rawBox}>
-                  <Caption color={Colors.textSecondary}>Raw SMS Payload</Caption>
-                  <BodyText small style={{ fontFamily: 'monospace', color: Colors.textSecondary, marginTop: 4 }}>
-                    {selectedTxn.rawText}
-                  </BodyText>
-                </View>
-              ) : null}
-
-              <Button title="Close" variant="ghost" style={{ marginTop: Spacing.xl }} onPress={() => setSelectedTxn(null)} />
-            </Card>
+              <Button title="Close" variant="ghost" style={{ marginTop: spacing.xl }} onPress={() => setSelectedTxn(null)} />
+            </View>
           </View>
         </Modal>
       )}
@@ -211,92 +199,51 @@ export default function TransactionsScreen() {
 
 const styles = StyleSheet.create({
   header: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
   },
-  txnCard: {
-    marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.sm,
-  },
-  avatar: {
+  filterButton: {
     width: 40,
     height: 40,
-    borderRadius: Radius.medium,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: Spacing.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
   },
-  avatarText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 16,
+  listContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
   },
-  reviewBadge: {
-    backgroundColor: Colors.warningMuted,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: Radius.small,
-    marginTop: 4,
+  dateHeader: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+    letterSpacing: 2,
+    color: colors.textSecondary,
   },
-  pill: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: Radius.pill,
-    backgroundColor: Colors.surface,
-    marginRight: Spacing.sm,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  pillActive: {
-    backgroundColor: Colors.accent,
-    borderColor: Colors.accent,
-  },
-  pillText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-    color: Colors.textSecondary,
-  },
-  pillTextActive: {
-    color: '#ffffff',
-  },
-  bankPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.medium,
-    backgroundColor: Colors.background,
-    marginRight: Spacing.xs,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  bankPillActive: {
-    borderColor: Colors.accentLight,
-    backgroundColor: Colors.surfaceElevated,
-  },
-  bankPillText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11,
-    color: Colors.textMuted,
-  },
-  bankPillTextActive: {
-    color: Colors.accentLight,
+  bankPillSize: {
+    height: 30,
+    paddingHorizontal: spacing.md,
   },
   emptyBox: {
-    padding: Spacing.xxl,
+    padding: spacing.xxl,
     alignItems: 'center',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    justifyContent: 'center',
-    padding: Spacing.lg,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    justifyContent: 'flex-end',
   },
-  modalCard: {
-    padding: Spacing.xl,
-  },
-  rawBox: {
-    backgroundColor: Colors.background,
-    padding: Spacing.md,
-    borderRadius: Radius.medium,
-    marginTop: Spacing.lg,
+  modalSheet: {
+    backgroundColor: colors.surface,
+    padding: spacing.xl,
+    paddingBottom: 40,
+    borderTopLeftRadius: radius.large,
+    borderTopRightRadius: radius.large,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
 });

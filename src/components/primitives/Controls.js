@@ -1,6 +1,7 @@
 import React from 'react';
-import { TouchableOpacity, Text, TextInput, View, StyleSheet } from 'react-native';
-import { Colors, Radius, Spacing, Typography } from '../../theme/tokens';
+import { Text, TextInput, View, StyleSheet, TouchableOpacity } from 'react-native';
+import { colors, radius, spacing, typography } from '../../design';
+import { Pressable } from './Pressable';
 
 export function Button({ title, onPress, variant = 'primary', size = 'medium', style, textStyle, ...props }) {
   const isPrimary = variant === 'primary';
@@ -8,8 +9,10 @@ export function Button({ title, onPress, variant = 'primary', size = 'medium', s
   const isGhost = variant === 'ghost';
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.7}
+    <Pressable
+      accessibilityLabel={title}
+      haptic
+      scaleTo={0.96}
       onPress={onPress}
       style={[
         styles.button,
@@ -32,17 +35,17 @@ export function Button({ title, onPress, variant = 'primary', size = 'medium', s
       >
         {title}
       </Text>
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
 export function Input({ placeholder, value, onChangeText, icon, style, ...props }) {
   return (
     <View style={[styles.inputContainer, style]}>
-      {icon ? <Text style={styles.inputIcon}>{icon}</Text> : null}
+      {icon ? (typeof icon === 'string' ? <Text style={styles.inputIcon}>{icon}</Text> : icon) : null}
       <TextInput
         placeholder={placeholder}
-        placeholderTextColor={Colors.textMuted}
+        placeholderTextColor={colors.textMuted}
         value={value}
         onChangeText={onChangeText}
         style={styles.textInput}
@@ -59,65 +62,63 @@ export function Input({ placeholder, value, onChangeText, icon, style, ...props 
 
 const styles = StyleSheet.create({
   button: {
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.md,
-    borderRadius: Radius.pill,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: radius.medium, // Master prompt says Radius: 12 for buttons
     alignItems: 'center',
     justifyContent: 'center',
   },
   btnPrimary: {
-    backgroundColor: Colors.accent,
+    backgroundColor: colors.primary,
   },
   btnDanger: {
-    backgroundColor: Colors.negativeMuted,
+    backgroundColor: colors.expenseBackground,
     borderWidth: 1,
-    borderColor: Colors.negative,
+    borderColor: colors.expense,
   },
   btnGhost: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   btnSmall: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
   },
   btnText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
+    ...typography.bodyBold,
   },
   btnTextPrimary: {
     color: '#ffffff',
   },
   btnTextDanger: {
-    color: Colors.negative,
+    color: colors.expense,
   },
   btnTextGhost: {
-    color: Colors.textSecondary,
+    color: colors.textPrimary,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.medium,
-    paddingHorizontal: Spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.medium,
+    paddingHorizontal: spacing.md,
     height: 48,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   inputIcon: {
     fontSize: 16,
-    marginRight: Spacing.sm,
+    marginRight: spacing.sm,
   },
   textInput: {
     flex: 1,
-    color: Colors.textPrimary,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
+    color: colors.textPrimary,
+    ...typography.body,
   },
   clearIcon: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontSize: 14,
-    paddingHorizontal: Spacing.xs,
+    paddingHorizontal: spacing.xs,
   },
 });

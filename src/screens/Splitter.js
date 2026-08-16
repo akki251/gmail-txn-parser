@@ -1,15 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import {
-  StyleSheet,
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  TextInput,
-  SafeAreaView,
-  Alert,
-} from 'react-native';
+import { StyleSheet, View, FlatList, TouchableOpacity, Alert } from 'react-native';
 import db from '../store/db';
+import { colors, radius, spacing } from '../design';
+import { ScreenContainer, Stack, Row, Section } from '../components/primitives/Layout';
+import { DisplayText, Heading, BodyText, Caption } from '../components/primitives/Text';
+import { Card, Surface, ThinDivider } from '../components/primitives/Surfaces';
+import { Button, Input } from '../components/primitives/Controls';
 
 export default function Splitter() {
   const [friends, setFriends] = useState([]);
@@ -67,212 +63,154 @@ export default function Splitter() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ScreenContainer>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Mini-Splitwise</Text>
-        <Text style={styles.headerSubtitle}>Split bank SMS expenses offline</Text>
+        <DisplayText style={styles.title}>Splitwise</DisplayText>
+        <BodyText color={colors.textSecondary}>Split expenses with friends.</BodyText>
       </View>
 
-      {/* Friends Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Add Friends</Text>
-        <View style={styles.addFriendRow}>
-          <TextInput
-            style={styles.input}
-            placeholder="Friend's Name"
-            placeholderTextColor="#64748b"
-            value={newFriendName}
-            onChangeText={setNewFriendName}
-          />
-          <TouchableOpacity style={styles.addBtn} onPress={handleAddFriend}>
-            <Text style={styles.addBtnText}>Add</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      <FlatList
+        data={[]}
+        renderItem={null}
+        ListHeaderComponent={
+          <Stack space={spacing.xl} style={styles.content}>
+            
+            {/* Friends Section */}
+            <Section>
+              <Heading level={3} style={styles.sectionTitle}>Friends</Heading>
+              <Row space={spacing.sm}>
+                <Input
+                  placeholder="Add friend..."
+                  value={newFriendName}
+                  onChangeText={setNewFriendName}
+                  style={{ flex: 1 }}
+                />
+                <Button title="Add" onPress={handleAddFriend} />
+              </Row>
+              
+              <View style={styles.friendsWrap}>
+                {friends.map((friend) => {
+                  const isSelected = selectedFriends.includes(friend.id);
+                  return (
+                    <TouchableOpacity
+                      key={friend.id}
+                      style={[styles.friendPill, isSelected && styles.selectedFriendPill]}
+                      onPress={() => toggleFriendSelection(friend.id)}
+                    >
+                      <BodyText
+                        small
+                        bold
+                        color={isSelected ? '#ffffff' : colors.textSecondary}
+                      >
+                        {friend.name}
+                      </BodyText>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </Section>
 
-      {/* Select Transaction to Split */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>1. Select Expense to Split</Text>
-        <FlatList
-          horizontal
-          data={transactions.slice(0, 10)}
-          keyExtractor={(item) => item.id}
-          showsHorizontalScrollIndicator={false}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[
-                styles.txnChip,
-                selectedTxn?.id === item.id && styles.selectedTxnChip,
-              ]}
-              onPress={() => setSelectedTxn(item)}
-            >
-              <Text style={styles.txnChipMerchant} numberOfLines={1}>
-                {item.merchant || item.bank || 'Spend'}
-              </Text>
-              <Text style={styles.txnChipAmount}>₹{item.amount}</Text>
-            </TouchableOpacity>
-          )}
-        />
-      </View>
+            {/* Select Transaction */}
+            <Section>
+              <Heading level={3} style={styles.sectionTitle}>1. Select Expense</Heading>
+              <FlatList
+                horizontal
+                data={transactions.slice(0, 15)}
+                keyExtractor={(item) => item.id}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: spacing.sm }}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[
+                      styles.txnChip,
+                      selectedTxn?.id === item.id && styles.selectedTxnChip,
+                    ]}
+                    onPress={() => setSelectedTxn(item)}
+                  >
+                    <Caption color={selectedTxn?.id === item.id ? colors.primaryStrong : colors.textMuted}>
+                      {item.merchant || item.bank || 'Spend'}
+                    </Caption>
+                    <Heading level={3} color={selectedTxn?.id === item.id ? '#ffffff' : colors.textPrimary}>
+                      ₹{item.amount}
+                    </Heading>
+                  </TouchableOpacity>
+                )}
+              />
+            </Section>
 
-      {/* Select Friends */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>2. Select Friends</Text>
-        <View style={styles.friendsWrap}>
-          {friends.map((friend) => {
-            const isSelected = selectedFriends.includes(friend.id);
-            return (
-              <TouchableOpacity
-                key={friend.id}
-                style={[
-                  styles.friendPill,
-                  isSelected && styles.selectedFriendPill,
-                ]}
-                onPress={() => toggleFriendSelection(friend.id)}
-              >
-                <Text
-                  style={[
-                    styles.friendPillText,
-                    isSelected && styles.selectedFriendPillText,
-                  ]}
-                >
-                  {friend.name}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
+          </Stack>
+        }
+      />
 
       {/* Action Button */}
-      {selectedTxn && (
+      {selectedTxn && selectedFriends.length > 0 && (
         <View style={styles.bottomBar}>
-          <TouchableOpacity style={styles.splitActionBtn} onPress={handleCreateSplit}>
-            <Text style={styles.splitActionText}>
-              Split ₹{selectedTxn.amount} Equally
-            </Text>
-          </TouchableOpacity>
+          <Button
+            title={`Split ₹${selectedTxn.amount} Equally`}
+            onPress={handleCreateSplit}
+            size="large"
+            style={styles.splitActionBtn}
+          />
         </View>
       )}
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0f172a',
-  },
   header: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 10,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xxxl,
+    paddingBottom: spacing.xl,
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#f8fafc',
+  title: {
+    marginBottom: spacing.xs,
   },
-  headerSubtitle: {
-    fontSize: 13,
-    color: '#94a3b8',
-    marginTop: 2,
-  },
-  section: {
-    paddingHorizontal: 20,
-    marginTop: 16,
+  content: {
+    paddingHorizontal: spacing.xl,
   },
   sectionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#cbd5e1',
-    marginBottom: 10,
-  },
-  addFriendRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  input: {
-    flex: 1,
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    color: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  addBtn: {
-    backgroundColor: '#6366f1',
-    paddingHorizontal: 20,
-    justifyContent: 'center',
-    borderRadius: 12,
-  },
-  addBtnText: {
-    color: '#ffffff',
-    fontWeight: '700',
-  },
-  txnChip: {
-    backgroundColor: '#1e293b',
-    borderRadius: 14,
-    padding: 14,
-    marginRight: 10,
-    width: 140,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  selectedTxnChip: {
-    borderColor: '#6366f1',
-    backgroundColor: 'rgba(99, 102, 241, 0.15)',
-  },
-  txnChipMerchant: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#f8fafc',
-  },
-  txnChipAmount: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#f43f5e',
-    marginTop: 6,
+    marginBottom: spacing.md,
   },
   friendsWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: spacing.sm,
+    marginTop: spacing.md,
   },
   friendPill: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: '#1e293b',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: colors.border,
   },
   selectedFriendPill: {
-    backgroundColor: '#10b981',
-    borderColor: '#10b981',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
-  friendPillText: {
-    color: '#94a3b8',
-    fontWeight: '600',
+  txnChip: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.medium,
+    padding: spacing.lg,
+    width: 140,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  selectedFriendPillText: {
-    color: '#ffffff',
+  selectedTxnChip: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
   },
   bottomBar: {
-    padding: 20,
-    marginTop: 'auto',
+    padding: spacing.xl,
+    paddingBottom: 100,
+    backgroundColor: colors.background,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
   splitActionBtn: {
-    backgroundColor: '#6366f1',
-    borderRadius: 16,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  splitActionText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
+    width: '100%',
+    paddingVertical: spacing.lg,
   },
 });

@@ -15,12 +15,6 @@
         "RECEIVE_SMS",
         "READ_SMS"
       ]
-    },
-    "ios": {
-      "bundleIdentifier": "com.personal.gmailtxnparser"
-    },
-    "plugins": [
-      "expo-font"
-    ]
+    }
   }
 }

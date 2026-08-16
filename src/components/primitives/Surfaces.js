@@ -1,16 +1,17 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
-import { Colors, Radius, Spacing } from '../../theme/tokens';
+import { View, StyleSheet } from 'react-native';
+import { colors, radius, spacing } from '../../design';
+import { Pressable } from './Pressable';
 
-export function Card({ children, style, onPress, elevated = false, ...props }) {
-  const Container = onPress ? TouchableOpacity : View;
+export function Card({ children, style, onPress, ...props }) {
+  const Container = onPress ? Pressable : View;
   return (
     <Container
-      activeOpacity={0.7}
-      onPress={onPress}
+      accessible={!!onPress}
+      accessibilityRole={onPress ? "button" : "none"}
+      {...(onPress ? { onPress, scaleTo: 0.98, haptic: true } : {})}
       style={[
         styles.card,
-        elevated && styles.elevated,
         style,
       ]}
       {...props}
@@ -28,30 +29,26 @@ export function Surface({ children, style, ...props }) {
   );
 }
 
-export function ThinDivider({ style, margin = Spacing.md }) {
+export function ThinDivider({ style, margin = spacing.md }) {
   return <View style={[styles.divider, { marginVertical: margin }, style]} />;
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.large,
-    padding: Spacing.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  elevated: {
-    backgroundColor: Colors.surfaceElevated,
-    borderColor: Colors.borderLight,
+    backgroundColor: colors.surface,
+    borderRadius: radius.medium,
+    padding: spacing.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
   },
   surface: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.medium,
-    padding: Spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.medium,
+    padding: spacing.md,
   },
   divider: {
-    height: 1,
-    backgroundColor: Colors.border,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
     width: '100%',
   },
 });

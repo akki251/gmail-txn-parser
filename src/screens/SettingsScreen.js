@@ -1,11 +1,12 @@
 import React from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Alert, DeviceEventEmitter } from 'react-native';
+import { StyleSheet, View, ScrollView, Alert, DeviceEventEmitter } from 'react-native';
+import Animated, { FadeInUp } from 'react-native-reanimated';
 import db from '../store/db';
-import { ScreenContainer, Stack, Row, Section } from '../components/primitives/Layout';
+import { ScreenContainer, Section } from '../components/primitives/Layout';
 import { Heading, BodyText, Caption } from '../components/primitives/Text';
-import { Card, ThinDivider } from '../components/primitives/Surfaces';
+import { ThinDivider } from '../components/primitives/Surfaces';
 import { Button } from '../components/primitives/Controls';
-import { Colors, Radius, Spacing } from '../theme/tokens';
+import { colors, spacing } from '../design';
 
 export default function SettingsScreen() {
   const handleClear = async () => {
@@ -29,62 +30,88 @@ export default function SettingsScreen() {
 
   return (
     <ScreenContainer>
-      <ScrollView contentContainerStyle={{ padding: Spacing.lg, paddingBottom: Spacing.xxl }}>
-        <Heading level={1}>Settings</Heading>
-        <Caption style={{ marginTop: 2, marginBottom: Spacing.xl }}>Preferences & Air-Gapped Security</Caption>
+      <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
+        <View style={{ paddingHorizontal: spacing.xl, paddingTop: spacing.xl, paddingBottom: spacing.lg }}>
+          <Heading level={1}>Settings</Heading>
+        </View>
 
-        <Section>
-          <Caption style={{ marginBottom: Spacing.sm }}>Security & Privacy</Caption>
-          <Card>
-            <Stack space={Spacing.md}>
-              <Row>
-                <BodyText bold>Air-Gapped Processing</BodyText>
-                <Caption color={Colors.positive}>Enabled</Caption>
-              </Row>
-              <ThinDivider margin={0} />
-              <Row>
-                <BodyText bold>On-Device AI Engine</BodyText>
-                <Caption color={Colors.positive}>llama.rn (Offline)</Caption>
-              </Row>
-              <ThinDivider margin={0} />
-              <Row>
-                <BodyText bold>Cloud Data Sync</BodyText>
-                <Caption color={Colors.textMuted}>Disabled (Zero Data Sent)</Caption>
-              </Row>
-            </Stack>
-          </Card>
+        <Animated.View entering={FadeInUp.delay(0).duration(350)}>
+        <Section style={{ marginBottom: spacing.xl }}>
+          <View style={{ paddingHorizontal: spacing.xl, paddingBottom: spacing.sm }}>
+            <Caption style={{ letterSpacing: 1.5, color: colors.textSecondary }}>SECURITY & PRIVACY</Caption>
+          </View>
+          <View style={styles.listBlock}>
+            <View style={styles.rowItem}>
+              <BodyText style={{ fontSize: 17 }}>Air-Gapped Processing</BodyText>
+              <Caption color={colors.income} style={{ textTransform: 'none', letterSpacing: 0, fontSize: 14 }}>Enabled</Caption>
+            </View>
+            <ThinDivider margin={0} style={{ marginHorizontal: spacing.xl, width: 'auto' }} />
+            <View style={styles.rowItem}>
+              <BodyText style={{ fontSize: 17 }}>On-Device AI Engine</BodyText>
+              <Caption color={colors.income} style={{ textTransform: 'none', letterSpacing: 0, fontSize: 14 }}>llama.rn (Offline)</Caption>
+            </View>
+            <ThinDivider margin={0} style={{ marginHorizontal: spacing.xl, width: 'auto' }} />
+            <View style={styles.rowItem}>
+              <BodyText style={{ fontSize: 17 }}>Cloud Data Sync</BodyText>
+              <Caption color={colors.textSecondary} style={{ textTransform: 'none', letterSpacing: 0, fontSize: 14 }}>Disabled (Zero Data Sent)</Caption>
+            </View>
+          </View>
         </Section>
+        </Animated.View>
 
-        <Section>
-          <Caption style={{ marginBottom: Spacing.sm }}>Data Storage</Caption>
-          <Card elevated>
-            <Stack space={Spacing.md}>
-              <Row>
-                <BodyText bold>Flat-JSON Store</BodyText>
-                <Caption color={Colors.accentLight}>db.json</Caption>
-              </Row>
-              <ThinDivider margin={0} />
-              <Button title="🗑️ Clear All Local Transaction Data" variant="danger" onPress={handleClear} />
-            </Stack>
-          </Card>
+        <Animated.View entering={FadeInUp.delay(60).duration(350)}>
+        <Section style={{ marginBottom: spacing.xl }}>
+          <View style={{ paddingHorizontal: spacing.xl, paddingBottom: spacing.sm }}>
+            <Caption style={{ letterSpacing: 1.5, color: colors.textSecondary }}>DATA STORAGE</Caption>
+          </View>
+          <View style={styles.listBlock}>
+            <View style={styles.rowItem}>
+              <BodyText style={{ fontSize: 17 }}>Flat-JSON Store</BodyText>
+              <Caption color={colors.primary} style={{ textTransform: 'none', letterSpacing: 0, fontSize: 14 }}>db.json</Caption>
+            </View>
+            <ThinDivider margin={0} style={{ marginHorizontal: spacing.xl, width: 'auto' }} />
+            <View style={{ padding: spacing.lg }}>
+              <Button title="Delete Local Transaction Data" variant="danger" onPress={handleClear} />
+            </View>
+          </View>
         </Section>
+        </Animated.View>
 
+        <Animated.View entering={FadeInUp.delay(120).duration(350)}>
         <Section>
-          <Caption style={{ marginBottom: Spacing.sm }}>About</Caption>
-          <Card>
-            <Stack space={Spacing.sm}>
-              <Row>
-                <BodyText small color={Colors.textMuted}>App Version</BodyText>
-                <BodyText small bold>1.0.0 (Expo SDK 50)</BodyText>
-              </Row>
-              <Row>
-                <BodyText small color={Colors.textMuted}>Architecture</BodyText>
-                <BodyText small bold>Offline-First React Native Android</BodyText>
-              </Row>
-            </Stack>
-          </Card>
+          <View style={{ paddingHorizontal: spacing.xl, paddingBottom: spacing.sm }}>
+            <Caption style={{ letterSpacing: 1.5, color: colors.textSecondary }}>ABOUT</Caption>
+          </View>
+          <View style={styles.listBlock}>
+            <View style={styles.rowItem}>
+              <BodyText style={{ fontSize: 17 }}>App Version</BodyText>
+              <Caption color={colors.textSecondary} style={{ textTransform: 'none', letterSpacing: 0, fontSize: 14 }}>1.0.0 (Expo SDK 50)</Caption>
+            </View>
+            <ThinDivider margin={0} style={{ marginHorizontal: spacing.xl, width: 'auto' }} />
+            <View style={styles.rowItem}>
+              <BodyText style={{ fontSize: 17 }}>Architecture</BodyText>
+              <Caption color={colors.textSecondary} style={{ textTransform: 'none', letterSpacing: 0, fontSize: 14 }}>Offline-First React Native</Caption>
+            </View>
+          </View>
         </Section>
+        </Animated.View>
       </ScrollView>
     </ScreenContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  listBlock: {
+    backgroundColor: colors.surface,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  rowItem: {
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+});
