@@ -74,67 +74,65 @@ export function avatarColorFor(label = '') {
   return AvatarPalette[hash % AvatarPalette.length];
 }
 
-// Type hierarchy: Merriweather (serif) carries editorial weight — display numbers,
-// section headings, anything meant to feel like a statement. Asap (sans) handles
-// everything functional — body copy, labels, buttons, captions. Standard two-family
-// pairing: serif for emphasis/hierarchy, grotesque sans for UI legibility at small sizes.
+// One-family type hierarchy: Gilroy carries display weight, readable UI copy,
+// labels, buttons, and captions through its loaded weights.
 export const Typography = {
   display: {
-    fontFamily: 'Merriweather_900Black',
+    fontFamily: 'Gilroy_Bold',
     fontSize: 40,
     lineHeight: 46,
     letterSpacing: -0.5,
   },
   h1: {
-    fontFamily: 'Merriweather_700Bold',
+    fontFamily: 'Gilroy_Bold',
     fontSize: 30,
     lineHeight: 36,
     letterSpacing: -0.3,
   },
   h2: {
-    fontFamily: 'Merriweather_700Bold',
+    fontFamily: 'Gilroy_Bold',
     fontSize: 22,
     lineHeight: 28,
   },
   h3: {
-    fontFamily: 'Merriweather_700Bold',
+    fontFamily: 'Gilroy_SemiBold',
     fontSize: 17,
     lineHeight: 23,
   },
   numeric: {
-    fontFamily: 'Merriweather_900Black',
+    fontFamily: 'Gilroy_Bold',
     fontSize: 34,
     lineHeight: 40,
     letterSpacing: -0.3,
   },
   numericSmall: {
-    fontFamily: 'Merriweather_700Bold',
+    fontFamily: 'Gilroy_SemiBold',
     fontSize: 17,
     lineHeight: 22,
   },
   body: {
-    fontFamily: 'Asap_400Regular',
+    fontFamily: 'Gilroy_Regular',
     fontSize: 15,
     lineHeight: 22,
   },
   bodyBold: {
-    fontFamily: 'Asap_600SemiBold',
+    fontFamily: 'Gilroy_SemiBold',
     fontSize: 15,
     lineHeight: 22,
   },
   bodySmall: {
-    fontFamily: 'Asap_400Regular',
+    fontFamily: 'Gilroy_Regular',
     fontSize: 13,
     lineHeight: 18,
   },
   caption: {
-    fontFamily: 'Asap_500Medium',
+    fontFamily: 'Gilroy_Medium',
     fontSize: 12,
     lineHeight: 16,
     letterSpacing: 0.2,
   },
   button: {
-    fontFamily: 'Asap_600SemiBold',
+    fontFamily: 'Gilroy_SemiBold',
     fontSize: 14,
   },
 };

@@ -6,3 +6,4 @@ token.json
 credentials.json
 pipelineStats.json
 .DS_Store
+*.gguf

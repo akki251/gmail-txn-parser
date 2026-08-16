@@ -25,6 +25,7 @@ export default function TransactionsScreen() {
   const [typeFilter, setTypeFilter] = useState('All');
   const [bankFilter, setBankFilter] = useState('All');
   const [selectedTxn, setSelectedTxn] = useState(null);
+  const [showRawText, setShowRawText] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -155,7 +156,7 @@ export default function TransactionsScreen() {
               <Row style={{ marginBottom: spacing.xl, alignItems: 'center' }}>
                 <Heading level={3}>Transaction Details</Heading>
                 <TouchableOpacity 
-                  onPress={() => setSelectedTxn(null)} 
+                  onPress={() => { setSelectedTxn(null); setShowRawText(false); }} 
                   style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}
                 >
                   <BodyText style={{ color: colors.textSecondary, fontSize: 16, lineHeight: 18 }}>✕</BodyText>
@@ -188,7 +189,26 @@ export default function TransactionsScreen() {
                   </BodyText>
                 </Row>
               </Stack>
-              <Button title="Close" variant="ghost" style={{ marginTop: spacing.xl }} onPress={() => setSelectedTxn(null)} />
+              
+              {/* Raw SMS Data Accordion */}
+              {selectedTxn.rawText && (
+                <View style={{ marginBottom: spacing.xl }}>
+                  <TouchableOpacity onPress={() => setShowRawText(!showRawText)} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.sm }}>
+                    <Caption style={{ color: colors.primary }}>View Raw SMS Data</Caption>
+                    <Feather name={showRawText ? "chevron-up" : "chevron-down"} size={16} color={colors.primary} />
+                  </TouchableOpacity>
+                  {showRawText && (
+                    <View style={{ marginTop: spacing.xs, padding: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border }}>
+                      <BodyText small style={{ color: colors.textSecondary }}>{selectedTxn.rawText}</BodyText>
+                      {selectedTxn.sourceParser && (
+                        <Caption style={{ marginTop: spacing.sm, color: colors.textMuted }}>Parsed by: {selectedTxn.sourceParser}</Caption>
+                      )}
+                    </View>
+                  )}
+                </View>
+              )}
+
+              <Button title="Close" variant="ghost" onPress={() => { setSelectedTxn(null); setShowRawText(false); }} />
             </View>
           </View>
         </Modal>

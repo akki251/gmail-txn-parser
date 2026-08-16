@@ -85,7 +85,7 @@ export default function SettingsScreen() {
           <View style={styles.listBlock}>
             <View style={styles.rowItem}>
               <BodyText style={{ fontSize: 17 }}>App Version</BodyText>
-              <Caption color={colors.textSecondary} style={{ textTransform: 'none', letterSpacing: 0, fontSize: 14 }}>1.0.0 (Expo SDK 50)</Caption>
+              <Caption color={colors.textSecondary} style={{ textTransform: 'none', letterSpacing: 0, fontSize: 14 }}>1.1.0 (Expo SDK 50)</Caption>
             </View>
             <ThinDivider margin={0} style={{ marginHorizontal: spacing.xl, width: 'auto' }} />
             <View style={styles.rowItem}>
