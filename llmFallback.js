@@ -6,8 +6,14 @@
  * Requires OPENROUTER_API_KEY in the environment.
  */
 
-const SYSTEM_PROMPT = `You extract structured transaction data from Indian bank/card transaction alert emails.
-Output ONLY valid JSON, no preamble, no markdown fences, matching this shape exactly:
+const SYSTEM_PROMPT = `You are a strict transaction classifier and extractor.
+First determine whether this message represents an actual financial transaction.
+The presence of a monetary amount is NOT evidence of a transaction.
+Loan offers, credit offers, eligibility messages, advertisements, cashback offers, rewards, bill reminders, payment reminders, future scheduled payments, OTPs and informational messages must be classified as NON_TRANSACTION.
+Only classify as TRANSACTION when the message contains sufficient evidence that money was actually moved or a transaction was actually attempted.
+If there is insufficient evidence or it's a NON_TRANSACTION, output ONLY: {"notATransaction": true}
+
+If it IS a valid transaction, output ONLY valid JSON, no preamble, no markdown fences, matching this shape exactly:
 {
   "bank": string,
   "instrument": "Credit Card" | "Debit Card" | "Account" | "UPI" | null,
@@ -18,8 +24,7 @@ Output ONLY valid JSON, no preamble, no markdown fences, matching this shape exa
   "type": "debit" | "credit",
   "status": "Approved" | "Declined" | "Pending",
   "rawDate": string | null
-}
-If the email is not actually a transaction alert (e.g. an offer, a statement reminder, a failed-payment notice with no real debit), output {"notATransaction": true} instead.`;
+}`;
 
 async function llmFallbackExtract(rawText) {
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
