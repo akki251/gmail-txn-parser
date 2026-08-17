@@ -24,13 +24,6 @@
     "llama.rn"
   ],
   "dependencies": {
-    "@expo-google-fonts/asap": "^0.4.3",
-    "@expo-google-fonts/instrument-serif": "^0.4.1",
-    "@expo-google-fonts/inter": "^0.4.2",
-    "@expo-google-fonts/jetbrains-mono": "^0.4.1",
-    "@expo-google-fonts/merriweather": "^0.4.2",
-    "@expo-google-fonts/playfair-display": "^0.4.2",
-    "@expo-google-fonts/source-serif-4": "^0.4.1",
     "@react-navigation/bottom-tabs": "^6.5.11",
     "@react-navigation/native": "^6.1.9",
     "expo": "~50.0.0",

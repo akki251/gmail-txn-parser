@@ -8,10 +8,11 @@ const NON_TRANSACTIONAL_RE =
 const COMPLETION_VERB_RE = /\b(debited|credited|spent|paid|withdrawn|purchase[d]?|sent|received|transferred|disbursed)\b/i;
 const FUTURE_RE = /\b(will be debited|is due|due on|due date|scheduled for|will be credited)\b/i;
 const FAILED_RE = /\b(failed|declined|rejected|not debited|no amount (was|has been) debited)\b/i;
+const BILL_PAYMENT_RE = /\b(received payment|payment.*received|bill payment.*received)\b/i;
 
 function isNonTransactional(text) {
   if (!text) return false;
-  if (FUTURE_RE.test(text) || FAILED_RE.test(text)) return true;
+  if (FUTURE_RE.test(text) || FAILED_RE.test(text) || BILL_PAYMENT_RE.test(text)) return true;
   return NON_TRANSACTIONAL_RE.test(text) && !COMPLETION_VERB_RE.test(text);
 }
 
