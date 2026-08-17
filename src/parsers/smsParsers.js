@@ -45,7 +45,26 @@ const SMS_PARSERS = [
         };
       }
 
-      // Case 3: Generic ICICI Debit Fallback
+      // Case 3: UPI incoming credit
+      re = /Acct\s*(\w+)?\s*is credited with\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+on\s+([\d]{1,2}-[\w]{3}-[\d]{2,4})\s+from\s+(.+?)\.\s*UPI:?\s*(\d+)/i;
+      m = text.match(re);
+      if (m) {
+        return {
+          bank: 'ICICI Bank',
+          instrument: 'Account',
+          account: m[1] || null,
+          amount: parseFloat(m[2].replace(/,/g, '')),
+          currency: 'INR',
+          merchant: m[4].trim(),
+          rawDate: m[3],
+          paymentMode: 'UPI',
+          refNo: m[5],
+          type: 'credit',
+          status: 'Approved',
+        };
+      }
+
+      // Case 4: Generic ICICI Debit Fallback
       re = /ICICI Bank (?:Acct|Account|Card)\s*(\w+)?\s*(?:debited|has been debited)\s*(?:for)?\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)/i;
       m = text.match(re);
       if (m) {
