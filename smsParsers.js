@@ -1,7 +1,6 @@
 /**
- * SMS transaction parser. Same sender-allowlist + regex-per-template
- * design as bankParsers.js — used for banks (ICICI) that only send UPI
- * alerts by SMS, never email.
+ * Deterministic Bank SMS Regex Engine for React Native Expo.
+ * Pure regex filters for ICICI, HDFC, SBI, Axis, IndusInd, and OneCard.
  */
 const { isNonTransactional } = require('./nonTransactional');
 
@@ -10,15 +9,8 @@ const SMS_PARSERS = [
     name: 'ICICI Bank SMS',
     matchSender: (sender, text) => /ICICI/i.test(sender || '') || /ICICI/i.test(text || ''),
     parse: (text) => {
-      // Case 1: UPI debit: "ICICI Bank Acct XX123 debited for Rs 1.00 on 05-Aug-26;
-      // JORDAN LEE credited. UPI:400000000004." — handles "Acct"/"Account", optional "for", flexible spaces.
-      // The refNo group MUST be a single clean optional group, not a chain
-      // of lazy/optional quantifiers — a previous version had
-      // `(?:\.|\s)*?(?:UPI:?\s*|\s*)?(\d+)?` here, where every piece could
-      // match zero-width, so the regex engine short-circuited before ever
-      // reaching the literal "UPI:" text and silently dropped every refNo.
-      let re =
-        /ICICI Bank (?:Acct|Account)\s*(\w+)\s+(?:has been\s+)?debited(?: for)?\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+on\s+([\d]{1,2}-[\w]{3}-[\d]{2,4});?\s*(.+?)\s+credited\.?\s*(?:UPI:?\s*(\d+))?/i;
+      // Case 1: UPI debit
+      let re = /ICICI Bank (?:Acct|Account)\s*(\w+)\s+(?:has been\s+)?debited(?: for)?\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+on\s+([\d]{1,2}-[\w]{3}-[\d]{2,4});?\s*(.+?)\s+credited(?:\.|\s)*?(?:UPI:?\s*|\s*)?(\d+)?/i;
       let m = text.match(re);
       if (m) {
         return {
@@ -36,32 +28,8 @@ const SMS_PARSERS = [
         };
       }
 
-      // Case 1b: Incoming credit — different phrasing from the debit alert
-      // above: "Dear Customer, Acct XX299 is credited with Rs 1.00 on
-      // 15-Aug-26 from AKSHANSH SHRIVA. UPI:213256165737-ICICI Bank."
-      re =
-        /Dear Customer,\s*Acct\s+(\w+)\s+is credited with Rs\.?\s?([\d,]+\.?\d*)\s+on\s+([\d]{1,2}-\w{3}-\d{2,4})\s+from\s+(.+?)\.\s*UPI:(\d+)/i;
-      m = text.match(re);
-      if (m) {
-        return {
-          bank: 'ICICI Bank',
-          instrument: 'Account',
-          account: m[1],
-          amount: parseFloat(m[2].replace(/,/g, '')),
-          currency: 'INR',
-          merchant: m[4].trim(),
-          rawDate: m[3],
-          paymentMode: 'UPI',
-          refNo: m[5],
-          type: 'credit',
-          status: 'Approved',
-        };
-      }
-
-      // Case 2: Card debit (Prepaid / Debit / Credit Card)
-      // "Dear Customer, Rs 146.70 debited from ICICI Bank Prepaid Card 5278 on 11-Aug-26. Info- ZOMATO."
-      re =
-        /(?:Rs\.?|INR)\s?([\d,]+\.?\d*)\s+debited from ICICI Bank (Prepaid Card|Debit Card|Credit Card|Card|Account)\s+(\w+)\s+on\s+([\d]{1,2}-\w{3}-\d{2,4})\.\s*Info-?\s*([^.]+)\./i;
+      // Case 2: Card debit
+      re = /(?:Rs\.?|INR)\s?([\d,]+\.?\d*)\s+debited from ICICI Bank (Prepaid Card|Debit Card|Credit Card|Card|Account)\s+(\w+)\s+on\s+([\d]{1,2}-\w{3}-\d{2,4})\.\s*Info-?\s*([^.]+)\./i;
       m = text.match(re);
       if (m) {
         return {
@@ -92,7 +60,77 @@ const SMS_PARSERS = [
           status: 'Approved',
         };
       }
+      return null;
+    },
+  },
 
+  {
+    name: 'HDFC Bank SMS',
+    matchSender: (sender, text) => /HDFCBK|HDFC/i.test(sender || '') || /HDFC Bank/i.test(text || ''),
+    parse: (text) => {
+      // HDFC UPI Debit: "Money Transfer: Rs 250.00 debited from A/C **1234 to ZOMATO on 14-AUG-26"
+      let re = /(?:Money Transfer:\s*)?(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+debited from (?:A\/C|Acct)\s+(\*+\w+)\s+to\s+(.+?)\s+on\s+([\d]{1,2}-[\w]{3}-[\d]{2,4})/i;
+      let m = text.match(re);
+      if (m) {
+        return {
+          bank: 'HDFC Bank',
+          instrument: 'Account',
+          account: m[2].replace(/\*/g, ''),
+          amount: parseFloat(m[1].replace(/,/g, '')),
+          currency: 'INR',
+          merchant: m[3].trim(),
+          rawDate: m[4],
+          type: 'debit',
+          status: 'Approved',
+        };
+      }
+      return null;
+    },
+  },
+
+  {
+    name: 'SBI Card SMS',
+    matchSender: (sender, text) => /SBICRD|SBICARD|SBI/i.test(sender || '') || /SBI Card/i.test(text || ''),
+    parse: (text) => {
+      // SBI Card: "Rs. 510.90 spent on your SBI Credit Card ending 5678 at JioRecharge on 24-Jul-26."
+      const re = /(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+spent on your SBI Credit Card ending\s+(\w+)\s+at\s+(.+?)\s+on\s+([\d]{1,2}-[\w]{3}-[\d]{2,4})/i;
+      const m = text.match(re);
+      if (m) {
+        return {
+          bank: 'SBI Card',
+          instrument: 'Credit Card',
+          last4: m[2],
+          amount: parseFloat(m[1].replace(/,/g, '')),
+          currency: 'INR',
+          merchant: m[3].trim(),
+          rawDate: m[4],
+          type: 'debit',
+          status: 'Approved',
+        };
+      }
+      return null;
+    },
+  },
+
+  {
+    name: 'Axis Bank SMS',
+    matchSender: (sender, text) => /AXISBK|AXIS/i.test(sender || '') || /Axis Bank/i.test(text || ''),
+    parse: (text) => {
+      const re = /(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+spent on Axis Bank (?:Credit|Debit) Card XX(\w+)\s+at\s+(.+?)\s+on\s+([\d]{1,2}-[\w]{3}-[\d]{2,4})/i;
+      const m = text.match(re);
+      if (m) {
+        return {
+          bank: 'Axis Bank',
+          instrument: 'Card',
+          last4: m[2],
+          amount: parseFloat(m[1].replace(/,/g, '')),
+          currency: 'INR',
+          merchant: m[3].trim(),
+          rawDate: m[4],
+          type: 'debit',
+          status: 'Approved',
+        };
+      }
       return null;
     },
   },
@@ -111,6 +149,25 @@ const SMS_PARSERS = [
         currency: 'INR',
         merchant: m[3].trim(),
         rawDate: m[2],
+        type: 'debit',
+        status: 'Approved',
+      };
+    },
+  },
+
+  {
+    name: 'Axio Pay Later SMS',
+    matchSender: (sender, text) => /axio/i.test(sender || '') || /axio/i.test(text || ''),
+    parse: (text) => {
+      const re = /(?:availing Pay Later credit|spent|debited|charged)(?: of)?\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)/i;
+      const m = text.match(re);
+      if (!m) return null;
+      return {
+        bank: 'Axio',
+        instrument: 'Pay Later',
+        amount: parseFloat(m[1].replace(/,/g, '')),
+        currency: 'INR',
+        merchant: 'Axio Pay Later',
         type: 'debit',
         status: 'Approved',
       };
