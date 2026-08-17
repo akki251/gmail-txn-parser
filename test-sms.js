@@ -33,6 +33,11 @@ const fixtures = [
     text: 'Rs. 189.01 sent from OneCard on 06 Aug 2026 to Dominospizza. Not you? Call on 18002109111 to report -OneCard',
   },
   {
+    label: 'HDFC Bank — incoming UPI credit',
+    sender: 'HDFCBK-S',
+    text: 'Credit Alert!\nRs.1.00 credited to HDFC Bank A/c XX6770 on 17-08-26 from VPA 8966970633@ptyes (UPI 213469064050)',
+  },
+  {
     label: 'Random personal text — should be IGNORED (not a bank sender)',
     sender: '+919876543210',
     text: 'Can I call you later?',

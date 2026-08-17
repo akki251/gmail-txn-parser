@@ -87,7 +87,7 @@ const SMS_PARSERS = [
     name: 'HDFC Bank SMS',
     matchSender: (sender, text) => /HDFCBK|HDFC/i.test(sender || '') || /HDFC Bank/i.test(text || ''),
     parse: (text) => {
-      // HDFC UPI Debit: "Money Transfer: Rs 250.00 debited from A/C **1234 to ZOMATO on 14-AUG-26"
+      // Case 1: HDFC UPI Debit: "Money Transfer: Rs 250.00 debited from A/C **1234 to ZOMATO on 14-AUG-26"
       let re = /(?:Money Transfer:\s*)?(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+debited from (?:A\/C|Acct)\s+(\*+\w+)\s+to\s+(.+?)\s+on\s+([\d]{1,2}-[\w]{3}-[\d]{2,4})/i;
       let m = text.match(re);
       if (m) {
@@ -103,6 +103,26 @@ const SMS_PARSERS = [
           status: 'Approved',
         };
       }
+
+      // Case 2: HDFC UPI Credit: "Credit Alert!\nRs.1.00 credited to HDFC Bank A/c XX6770 on 17-08-26 from VPA 8966970633@ptyes (UPI 213469064050)"
+      re = /Credit Alert!\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s*credited to HDFC Bank A\/c\s*(?:[A-Za-z*]+)?(\d+)\s*on\s*([\d]{1,2}-[\w]{2,3}-[\d]{2,4})\s*from\s*(?:VPA\s*)?([^(]+)(?:\s*\(UPI\s*(\d+)\))?/i;
+      m = text.match(re);
+      if (m) {
+        return {
+          bank: 'HDFC Bank',
+          instrument: 'Account',
+          account: m[2],
+          amount: parseFloat(m[1].replace(/,/g, '')),
+          currency: 'INR',
+          merchant: m[4].trim(),
+          rawDate: m[3],
+          type: 'credit',
+          status: 'Approved',
+          paymentMode: 'UPI',
+          refNo: m[5] || null,
+        };
+      }
+
       return null;
     },
   },
