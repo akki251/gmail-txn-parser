@@ -218,11 +218,17 @@ function avatarInitials(label) {
 // with its click/swipe handlers. Shared between the day-grouped
 // Transactions list and the flat, amount-sorted Suggested list.
 function buildTxnRow(t) {
+  const container = document.createElement('div');
+  container.className = 'txn-container';
+  container.style.display = 'flex';
+  container.style.flexDirection = 'column';
+
   const wrapper = document.createElement('div');
   wrapper.className = 'txn-wrapper';
 
   const swipeBg = document.createElement('div');
   swipeBg.className = 'swipe-bg';
+  swipeBg.innerHTML = '<span><span class="icon">💬</span> Split</span><span><span class="icon">❌</span> Ignore</span>';
 
   const row = document.createElement('div');
   const done = isDone(t);
@@ -230,7 +236,7 @@ function buildTxnRow(t) {
 
   let badgeClass, badgeText, amountHtml, titleText, metaText;
   if (t.needsReview) {
-    badgeClass = 'badge review';
+    badgeClass = 'badge needs-review';
     badgeText = '⚠ needs review';
     amountHtml = '';
     titleText = 'Unparsed message';
@@ -261,6 +267,38 @@ function buildTxnRow(t) {
 
   wrapper.appendChild(swipeBg);
   wrapper.appendChild(row);
+  container.appendChild(wrapper);
+
+  if (t.rawText) {
+    const rawBox = document.createElement('div');
+    rawBox.className = 'hidden';
+    rawBox.style.padding = '8px 14px 12px 14px';
+    rawBox.style.fontSize = '12px';
+    rawBox.style.color = 'var(--ink-muted)';
+    rawBox.style.background = 'var(--surface-2)';
+    rawBox.style.borderBottomLeftRadius = '14px';
+    rawBox.style.borderBottomRightRadius = '14px';
+    rawBox.style.whiteSpace = 'pre-wrap';
+    rawBox.style.wordBreak = 'break-word';
+    rawBox.style.marginTop = '-8px';
+    rawBox.textContent = t.rawText;
+
+    const smsBtn = document.createElement('div');
+    smsBtn.className = 'badge';
+    smsBtn.style.cursor = 'pointer';
+    smsBtn.style.background = 'var(--surface-3)';
+    smsBtn.style.marginTop = '4px';
+    smsBtn.textContent = 'RAW ▾';
+    
+    smsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      rawBox.classList.toggle('hidden');
+      smsBtn.textContent = rawBox.classList.contains('hidden') ? 'RAW ▾' : 'RAW ▴';
+    });
+    
+    row.querySelector('.txn-side').appendChild(smsBtn);
+    container.appendChild(rawBox);
+  }
 
   if (t.splitStatus === 'unsplit' && !t.needsReview) {
     attachSwipeHandlers(row, swipeBg, t);
@@ -268,7 +306,7 @@ function buildTxnRow(t) {
     row.addEventListener('click', () => openDetail(t.id));
   }
 
-  return wrapper;
+  return container;
 }
 
 function renderTransactions() {

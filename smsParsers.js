@@ -228,7 +228,7 @@ function parseTransactionSms({ sender, text }) {
         result = null;
       }
       if (result) {
-        return { ...result, sourceParser: parser.name, needsLLMFallback: false };
+        return { ...result, sourceParser: parser.name, needsLLMFallback: false, rawText: text };
       }
       return { needsLLMFallback: true, sourceParser: parser.name, rawText: text };
     }
