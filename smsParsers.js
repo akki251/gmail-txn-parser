@@ -10,7 +10,7 @@ const SMS_PARSERS = [
     matchSender: (sender, text) => /ICICI/i.test(sender || '') || /ICICI/i.test(text || ''),
     parse: (text) => {
       // Case 1: UPI debit
-      let re = /ICICI Bank (?:Acct|Account)\s*(\w+)\s+(?:has been\s+)?debited(?: for)?\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+on\s+([\d]{1,2}-[\w]{3}-[\d]{2,4});?\s*(.+?)\s+credited(?:\.|\s)*?(?:UPI:?\s*|\s*)?(\d+)?/i;
+      let re = /ICICI Bank (?:Acct|Account)\s*(\w+)\s+(?:has been\s+)?debited(?: for)?\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+on\s+([\d]{1,2}-[\w]{3}-[\d]{2,4});?\s*(.+?)\s+credited\.?\s*(?:UPI:?\s*(\d+))?/i;
       let m = text.match(re);
       if (m) {
         return {
