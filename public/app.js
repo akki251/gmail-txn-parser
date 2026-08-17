@@ -172,6 +172,7 @@ function filteredTransactions() {
   const range = dateFilterPills.value;
   const type = typeFilterPills.value;
   return allTransactions.filter((t) => {
+    if (t.status === 'Declined') return false;
     if (category && t.category !== category) return false;
     if (type && t.type !== type) return false;
     if (!passesDateFilter(t.date, range)) return false;
