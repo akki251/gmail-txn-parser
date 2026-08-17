@@ -218,11 +218,6 @@ function avatarInitials(label) {
 // with its click/swipe handlers. Shared between the day-grouped
 // Transactions list and the flat, amount-sorted Suggested list.
 function buildTxnRow(t) {
-  const container = document.createElement('div');
-  container.className = 'txn-container';
-  container.style.display = 'flex';
-  container.style.flexDirection = 'column';
-
   const wrapper = document.createElement('div');
   wrapper.className = 'txn-wrapper';
 
@@ -267,38 +262,6 @@ function buildTxnRow(t) {
 
   wrapper.appendChild(swipeBg);
   wrapper.appendChild(row);
-  container.appendChild(wrapper);
-
-  if (t.rawText) {
-    const rawBox = document.createElement('div');
-    rawBox.className = 'hidden';
-    rawBox.style.padding = '8px 14px 12px 14px';
-    rawBox.style.fontSize = '12px';
-    rawBox.style.color = 'var(--ink-muted)';
-    rawBox.style.background = 'var(--surface-2)';
-    rawBox.style.borderBottomLeftRadius = '14px';
-    rawBox.style.borderBottomRightRadius = '14px';
-    rawBox.style.whiteSpace = 'pre-wrap';
-    rawBox.style.wordBreak = 'break-word';
-    rawBox.style.marginTop = '-8px';
-    rawBox.textContent = t.rawText;
-
-    const smsBtn = document.createElement('div');
-    smsBtn.className = 'badge';
-    smsBtn.style.cursor = 'pointer';
-    smsBtn.style.background = 'var(--surface-3)';
-    smsBtn.style.marginTop = '4px';
-    smsBtn.textContent = 'RAW ▾';
-    
-    smsBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      rawBox.classList.toggle('hidden');
-      smsBtn.textContent = rawBox.classList.contains('hidden') ? 'RAW ▾' : 'RAW ▴';
-    });
-    
-    row.querySelector('.txn-side').appendChild(smsBtn);
-    container.appendChild(rawBox);
-  }
 
   if (t.splitStatus === 'unsplit' && !t.needsReview) {
     attachSwipeHandlers(row, swipeBg, t);
@@ -306,7 +269,7 @@ function buildTxnRow(t) {
     row.addEventListener('click', () => openDetail(t.id));
   }
 
-  return container;
+  return wrapper;
 }
 
 function renderTransactions() {
@@ -566,11 +529,31 @@ async function renderDetail() {
     actionHtml = '<p class="empty">Marked as personal.</p>';
   }
 
+  let rawHtml = '';
+  if (t.rawText) {
+    rawHtml = `
+      <h4 style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" id="detailRawToggle">
+        Raw message <span id="detailRawChevron">▾</span>
+      </h4>
+      <div class="review-rawtext hidden" id="detailRawContent" style="margin-top:-8px; margin-bottom:16px;">${escapeHtml(t.rawText)}</div>
+    `;
+  }
+
   detailContent.innerHTML = `
     <div class="detail-category" id="detailCategoryChip">${escapeHtml(t.category || 'Other')} ✎</div>
     <div class="detail-fields">${fieldsHtml}</div>
+    ${rawHtml}
     ${actionHtml}
   `;
+
+  if (t.rawText) {
+    document.getElementById('detailRawToggle').addEventListener('click', () => {
+      const content = document.getElementById('detailRawContent');
+      const chevron = document.getElementById('detailRawChevron');
+      content.classList.toggle('hidden');
+      chevron.textContent = content.classList.contains('hidden') ? '▾' : '▴';
+    });
+  }
 
   document.getElementById('detailCategoryChip').addEventListener('click', openCategorySheet);
 
