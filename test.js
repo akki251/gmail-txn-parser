@@ -11,7 +11,7 @@ const fixtures = [
       '<td>The transaction on your IndusInd Bank Credit Card ending 1234 for INR 717.38 on 11-07-2026 11:27:48 am at Bigtree Entertainment Pr is Approved. Available Limit: INR 199,290.30. <br/><br/> In case you have not authorized this transaction...</td>',
   },
   {
-    label: 'IndusInd — declined purchase',
+    label: 'IndusInd — declined purchase — should be SKIPPED',
     sender: 'transactionalert@indusind.com',
     htmlBody:
       '<td>The transaction on your IndusInd Bank Credit Card ending 1234 for INR 399.00 on 02-08-2026 12:05:42 AM at EPC*EPIC GAMES STORE is Declined. Pls call 18602677777 for queries.</td>',
