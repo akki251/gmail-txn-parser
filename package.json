@@ -18,6 +18,8 @@
     "test": "node test.js",
     "test:sms": "node test-sms.js",
     "test:nontransactional": "node test-nontransactional.js",
+    "test:parser": "node tests/parser.test.js",
+    "test:ci": "node tests/parser.test.js",
     "serve": "node server.js"
   },
   "trustedDependencies": [

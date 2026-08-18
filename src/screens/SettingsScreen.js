@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, View, ScrollView, Alert, DeviceEventEmitter } from 'react-native';
+import { localLlmFallbackExtract } from '../engine/localLLM';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import db from '../store/db';
 import { ScreenContainer, Section } from '../components/primitives/Layout';
@@ -9,6 +10,22 @@ import { Button } from '../components/primitives/Controls';
 import { colors, spacing } from '../design';
 
 export default function SettingsScreen() {
+  const [isTestingLLM, setIsTestingLLM] = useState(false);
+
+  const handleTestLLM = async () => {
+    setIsTestingLLM(true);
+    try {
+      const startTime = Date.now();
+      const res = await localLlmFallbackExtract("Rs 1 debited from HeartbeatTest");
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      Alert.alert('LLM Heartbeat OK', `Responded in ${elapsed}s:\n\n${JSON.stringify(res, null, 2)}`);
+    } catch (err) {
+      Alert.alert('LLM Heartbeat Failed', err.message);
+    } finally {
+      setIsTestingLLM(false);
+    }
+  };
+
   const handleClear = async () => {
     Alert.alert(
       'Reset All Data',
@@ -54,6 +71,10 @@ export default function SettingsScreen() {
             <View style={styles.rowItem}>
               <BodyText style={{ fontSize: 17 }}>Cloud Data Sync</BodyText>
               <Caption color={colors.textSecondary} style={{ textTransform: 'none', letterSpacing: 0, fontSize: 14 }}>Disabled (Zero Data Sent)</Caption>
+            </View>
+            <ThinDivider margin={0} style={{ marginHorizontal: spacing.xl, width: 'auto' }} />
+            <View style={{ padding: spacing.lg }}>
+              <Button title={isTestingLLM ? "Testing LLM..." : "Test LLM Heartbeat"} variant="secondary" onPress={handleTestLLM} disabled={isTestingLLM} />
             </View>
           </View>
         </Section>

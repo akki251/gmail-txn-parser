@@ -5,7 +5,7 @@
 let FileSystem = null;
 try {
   FileSystem = require('expo-file-system');
-} catch {}
+} catch { }
 
 let llamaContext = null;
 let isInitializing = false;
@@ -57,7 +57,7 @@ let isLlmProcessing = false;
 async function processQueue() {
   if (isLlmProcessing || llmQueue.length === 0) return;
   isLlmProcessing = true;
-  
+
   const { rawText, resolve } = llmQueue.shift();
   try {
     const result = await _internalLlmExtract(rawText);
@@ -97,7 +97,7 @@ async function _internalLlmExtract(rawText) {
   const candidateAmountMatch = rawText.match(/(?:Rs\.?|INR|₹)\s*([\d,]+\.?\d*)/i);
   if (candidateAmountMatch) {
     const TRANSACTION_VERBS = /\b(debited|credited|spent|paid|received|transferred|withdrawn|deposited|charged|purchased|disbursed|declined|refunded|reversed)\b/i;
-    
+
     // Only return an immediate transaction if there is explicit semantic evidence
     if (TRANSACTION_VERBS.test(rawText)) {
       const amount = parseFloat(candidateAmountMatch[1].replace(/,/g, ''));
@@ -144,18 +144,32 @@ async function _internalLlmExtract(rawText) {
       });
 
       const text = response.text ? response.text.trim() : '';
+      console.log('[llama.rn] Raw Completion Text:', text);
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
-        
+
         // Removed the paradoxical Post-LLM Validator. If the message reached the LLM, 
         // it means it lacked explicit verbs. The LLM is the final judge.
-        
+
+        // Robustly extract numeric amount from strings like "Rs.6000.00", "6000", etc.
+        const rawAmt = parsed.amount;
+        const parsedAmt = typeof rawAmt === 'number'
+          ? rawAmt
+          : parseFloat(String(rawAmt).match(/([\d,]+\.?\d*)/)?.[1]?.replace(/,/g, '') || '0') || 0;
+
+        // LLM sometimes swaps merchant/bank — fix if bank has no digits but merchant does
+        let merchant = parsed.merchant || 'Merchant';
+        let bank = parsed.bank || 'Bank';
+        if (bank && !/\d/.test(bank) && merchant && /\d/.test(merchant)) {
+          [merchant, bank] = [bank, merchant];
+        }
+
         return {
-          amount: typeof parsed.amount === 'number' ? parsed.amount : parseFloat(parsed.amount) || 0,
-          merchant: parsed.merchant || 'Merchant',
+          amount: parsedAmt,
+          merchant,
           type: parsed.type === 'credit' ? 'credit' : 'debit',
-          bank: parsed.bank || 'Bank',
+          bank,
           currency: 'INR',
           notATransaction: Boolean(parsed.notATransaction),
           needsReview: false,

@@ -1,0 +1,172 @@
+[
+  {
+    "id": "original-axis-loan-offer",
+    "sms": "Hi Customer, the clock is ticking. Avail your Axis Bank 24x7 Personal Loans offer of Rs.500000 starting @15.25% p.a. https://Axbk.in/AXISMR/Xy62ctGZROo T&C",
+    "expected": { "classification": "NON_TRANSACTION" }
+  },
+  {
+    "id": "onecard-repayment-received",
+    "sms": "Hola! that was sweet. We have received payment against your OneCard for Rs. 4,137.69 on 17 Aug 2026.",
+    "expected": { "classification": "NON_TRANSACTION" }
+  },
+  {
+    "id": "card-payment-debit-from-bank",
+    "sms": "HDFC Bank: Rs.8250.00 has been debited from your account towards your credit card bill payment.",
+    "expected": { "classification": "TRANSACTION", "type": "debit", "amount": 8250 }
+  },
+  {
+    "id": "loan-credit-disbursement",
+    "sms": "Rs.500000 has been credited to your account XX1234 as personal loan disbursement.",
+    "expected": { "classification": "TRANSACTION", "type": "credit", "amount": 500000 }
+  },
+  {
+    "id": "future-emi-debit",
+    "sms": "Your HDFC Bank account will be debited by Rs.24999 for EMI.",
+    "expected": { "classification": "NON_TRANSACTION" }
+  },
+  {
+    "id": "actual-emi-debit",
+    "sms": "Rs.12499.00 has been debited from your account towards Personal Loan EMI.",
+    "expected": { "classification": "TRANSACTION", "type": "debit", "amount": 12499 }
+  },
+  {
+    "id": "refund-initiated",
+    "sms": "Amazon: Refund of Rs.1299.00 for your cancelled order has been initiated. It will be credited within 5-7 working days.",
+    "expected": { "classification": "NON_TRANSACTION" }
+  },
+  {
+    "id": "refund-credited",
+    "sms": "Amazon: Refund of Rs.1299.00 has been credited to your original payment account.",
+    "expected": { "classification": "TRANSACTION", "type": "credit", "amount": 1299 }
+  },
+  {
+    "id": "icici-upi-debit",
+    "sms": "ICICI Bank Acct XX299 debited for Rs 250.00 on 15-Aug-26; ZOMATO credited. UPI:999888777.",
+    "expected": { "classification": "TRANSACTION", "type": "debit", "amount": 250 }
+  },
+  {
+    "id": "hdfc-upi-sent-multiline",
+    "sms": "Sent Rs.6000.00\nFrom HDFC Bank A/C *9760\nTo ABHIUE ANAND\nOn 29/07/26\nRef 622722434795\nNot You?\nCall 18002586161/SMS BLOCK UPI to 7308080808",
+    "expected": { "classification": "TRANSACTION", "type": "debit", "amount": 6000 }
+  },
+  {
+    "id": "otp-message",
+    "sms": "OTP for your ICICI Bank transaction of Rs 500 is 882910. Do not share.",
+    "expected": { "classification": "NON_TRANSACTION" }
+  },
+  {
+    "id": "credit-limit-promo",
+    "sms": "Great news! Your credit limit has been increased to Rs.150000. Use it wisely.",
+    "expected": { "classification": "NON_TRANSACTION" }
+  },
+  {
+    "id": "cashback-promo",
+    "sms": "Get Rs.10000 cashback when you spend Rs.500000 on your HDFC card this festive season.",
+    "expected": { "classification": "NON_TRANSACTION" }
+  },
+  {
+    "id": "card-bill-reminder",
+    "sms": "Your HDFC Credit Card bill of Rs.18701 is due on 20-Aug-2026. Please pay on time.",
+    "expected": { "classification": "NON_TRANSACTION" }
+  },
+  {
+    "id": "declined-transaction",
+    "sms": "Card transaction of Rs.4999 was declined at AMAZON. Call 1800 if not you.",
+    "expected": { "classification": "NON_TRANSACTION" }
+  },
+  {
+    "id": "pending-upi",
+    "sms": "UPI payment of Rs.2450 is pending. Please check your UPI app.",
+    "expected": { "classification": "NON_TRANSACTION" }
+  },
+  {
+    "id": "lazypay-purchase",
+    "sms": "LazyPay: Your purchase of Rs.1899 at ZOMATO was successful.",
+    "expected": { "classification": "TRANSACTION", "type": "debit", "amount": 1899 }
+  },
+  {
+    "id": "lazypay-payment-received",
+    "sms": "LazyPay: Payment of Rs.3500 towards your outstanding bill has been received.",
+    "expected": { "classification": "NON_TRANSACTION" }
+  },
+  {
+    "id": "lazypay-due-reminder",
+    "sms": "LazyPay: Your outstanding bill of Rs.3500 is due tomorrow. Pay now.",
+    "expected": { "classification": "NON_TRANSACTION" }
+  },
+  {
+    "id": "lazypay-cancelled",
+    "sms": "Update:\nRs. 2499.00 UPI mandate to APPLE MEDIA SERVICES has been cancelled from HDFC Bank A/c x6770.\nUMN: 59430edc5d3a6842e0634bcee10a73c7@pthdfc",
+    "expected": { "classification": "NON_TRANSACTION" }
+  },
+  {
+    "id": "salary-credit",
+    "sms": "Rs.85000.00 credited to your SBI account XX4321 on 01-Aug-26. Your updated balance is Rs.92450.",
+    "expected": { "classification": "TRANSACTION", "type": "credit", "amount": 85000 }
+  },
+  {
+    "id": "balance-alert-only",
+    "sms": "Your available balance is Rs.84501.00 as of 17-Aug-2026.",
+    "expected": { "classification": "NON_TRANSACTION" }
+  },
+  {
+    "id": "statement-summary",
+    "sms": "Monthly statement: Total debits Rs.82500 Total credits Rs.71447.",
+    "expected": { "classification": "NON_TRANSACTION" }
+  },
+  {
+    "id": "loan-offer-eligibility",
+    "sms": "You are eligible for Rs.500000 personal loan from Axis Bank. Apply now.",
+    "expected": { "classification": "NON_TRANSACTION" }
+  },
+  {
+    "id": "loan-approved-not-disbursed",
+    "sms": "Your personal loan of Rs.500000 has been approved. Disbursement will happen shortly.",
+    "expected": { "classification": "NON_TRANSACTION" }
+  },
+  {
+    "id": "future-scheduled-payment",
+    "sms": "Your broadband payment of Rs.1499 is scheduled for tomorrow via NACH.",
+    "expected": { "classification": "NON_TRANSACTION" }
+  },
+  {
+    "id": "debit-balance-both",
+    "sms": "Your account was debited Rs.5000. Available balance is Rs.45000.",
+    "expected": { "classification": "TRANSACTION", "type": "debit", "amount": 5000 }
+  },
+  {
+    "id": "reversal-credit",
+    "sms": "Rs.5000 credited to your account. Your previous transaction of Rs.5000 was reversed.",
+    "expected": { "classification": "TRANSACTION", "type": "credit", "amount": 5000 }
+  },
+  {
+    "id": "upi-incoming-p2p",
+    "sms": "ICICI Bank Acct XX299 is credited with Rs 1200.00 on 17-Aug-26 from RAHUL SHARMA. UPI:123456789.",
+    "expected": { "classification": "TRANSACTION", "type": "credit", "amount": 1200 }
+  },
+  {
+    "id": "sbi-credit-card-spend",
+    "sms": "Rs. 799.00 spent on your SBI Credit Card ending 5678 at NETFLIX on 10-Aug-26.",
+    "expected": { "classification": "TRANSACTION", "type": "debit", "amount": 799 }
+  },
+  {
+    "id": "atm-withdrawal",
+    "sms": "Rs.5000.00 withdrawn from ATM at HDFC Bank ATM on 15-Aug-26. Available balance Rs.20000.",
+    "expected": { "classification": "TRANSACTION", "type": "debit", "amount": 5000 }
+  },
+  {
+    "id": "multi-amount-loan-promo",
+    "sms": "Get a loan up to Rs.1000000 with EMI starting from Rs.3499. Apply now.",
+    "expected": { "classification": "NON_TRANSACTION" }
+  },
+  {
+    "id": "future-will-be-credited",
+    "sms": "Rs.500000 will be credited to your account tomorrow as loan disbursement.",
+    "expected": { "classification": "NON_TRANSACTION" }
+  },
+  {
+    "id": "verification-charge",
+    "sms": "Your card was charged Rs.2 for verification. No purchase was made. It will be reversed.",
+    "expected": { "classification": "NON_TRANSACTION" }
+  }
+]
