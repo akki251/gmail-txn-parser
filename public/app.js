@@ -3,7 +3,6 @@
 let allTransactions = [];
 let allCategories = [];
 let allFriends = [];
-let allSplits = {};
 let activeTab = 'dashboard';
 let activeTxn = null;
 let selectedFriendIds = new Set();
@@ -49,6 +48,40 @@ function showToast(msg) {
   setTimeout(() => { el.style.display = 'none'; }, 2600);
 }
 
+// Robust date parser for all Indian bank formats (ISO, DD-MM-YY, DD-Mon-YY, etc.)
+function parseTxnDate(item) {
+  if (!item) return null;
+  const raw = item.date || item.rawDate;
+  if (!raw || raw === 'Today' || raw === 'Yesterday') return new Date();
+
+  // Try standard ISO or parseable string
+  const d = new Date(raw);
+  if (!isNaN(d.getTime())) return d;
+
+  // Handle DD-MM-YY or DD-MM-YYYY (e.g. 18-08-26 or 18-08-2026)
+  const ddmmyyMatch = String(raw).match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})/);
+  if (ddmmyyMatch) {
+    const day = parseInt(ddmmyyMatch[1], 10);
+    const month = parseInt(ddmmyyMatch[2], 10) - 1;
+    let year = parseInt(ddmmyyMatch[3], 10);
+    if (year < 100) year += 2000;
+    return new Date(year, month, day);
+  }
+
+  // Handle DD-Mon-YY (e.g. 18-Aug-26 or 18-AUG-2026)
+  const ddMonMatch = String(raw).match(/^(\d{1,2})[-/]([A-Za-z]{3})[-/](\d{2,4})/i);
+  if (ddMonMatch) {
+    const day = parseInt(ddMonMatch[1], 10);
+    const months = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+    const month = months[ddMonMatch[2].toLowerCase()] ?? 0;
+    let year = parseInt(ddMonMatch[3], 10);
+    if (year < 100) year += 2000;
+    return new Date(year, month, day);
+  }
+
+  return null;
+}
+
 // API Helper
 async function api(path, options = {}) {
   const res = await fetch('/api' + path, {
@@ -65,20 +98,43 @@ async function api(path, options = {}) {
   return data;
 }
 
-// ---- Insights Engine (Ported directly from Android src/engine/insights.js) ----
-function generateInsights(txns = []) {
+// ---- Determine Active Month for Calculations ----
+function getActiveMonthContext(txns = []) {
   const now = new Date();
+  
+  // Find transactions that have valid dates
+  const validDates = txns.map(parseTxnDate).filter(Boolean);
+  if (validDates.length === 0) {
+    return { month: now.getMonth(), year: now.getFullYear() };
+  }
+
+  // Check if current calendar month has transactions
+  const hasCurrentMonth = validDates.some(d => d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear());
+  if (hasCurrentMonth) {
+    return { month: now.getMonth(), year: now.getFullYear() };
+  }
+
+  // Fallback to the latest transaction's month so stats are always populated
+  const sortedDates = validDates.sort((a, b) => b.getTime() - a.getTime());
+  const latest = sortedDates[0];
+  return { month: latest.getMonth(), year: latest.getFullYear() };
+}
+
+// ---- Insights Engine (Ported directly from Android src/engine/insights.js) ----
+function generateInsights(txns = [], activeCtx) {
+  const { month, year } = activeCtx || getActiveMonthContext(txns);
   const debits = txns.filter(t => t.type === 'debit' && !t.notATransaction && Number(t.amount) > 0);
   
   const isCurrentMonth = (t) => {
-    const d = new Date(t.date || t.rawDate);
-    return !isNaN(d.getTime()) && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    const d = parseTxnDate(t);
+    return d && d.getMonth() === month && d.getFullYear() === year;
   };
 
   const isPrevMonth = (t) => {
-    const d = new Date(t.date || t.rawDate);
-    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    return !isNaN(d.getTime()) && d.getMonth() === prev.getMonth() && d.getFullYear() === prev.getFullYear();
+    const d = parseTxnDate(t);
+    const prevMonth = month === 0 ? 11 : month - 1;
+    const prevYear = month === 0 ? year - 1 : year;
+    return d && d.getMonth() === prevMonth && d.getFullYear() === prevYear;
   };
 
   const currentMonthTxns = debits.filter(isCurrentMonth);
@@ -163,10 +219,17 @@ async function loadAllData() {
       api('/ledger').catch(() => ({})),
     ]);
 
-    allTransactions = txns.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
-    allCategories = categories;
-    allFriends = friends;
-    window._ledger = ledgerData;
+    allTransactions = Array.isArray(txns)
+      ? txns.sort((a, b) => {
+          const da = parseTxnDate(a)?.getTime() || 0;
+          const db = parseTxnDate(b)?.getTime() || 0;
+          return db - da;
+        })
+      : [];
+
+    allCategories = Array.isArray(categories) ? categories : [];
+    allFriends = Array.isArray(friends) ? friends : [];
+    window._ledger = ledgerData || {};
 
     renderApp();
   } catch (err) {
@@ -191,16 +254,21 @@ function renderDashboard() {
     greetingEl.textContent = hours < 12 ? 'GOOD MORNING' : hours < 17 ? 'GOOD AFTERNOON' : 'GOOD EVENING';
   }
 
-  // Filter current month debits & credits
+  const activeCtx = getActiveMonthContext(allTransactions);
+  const { month, year } = activeCtx;
+
+  // Filter active month debits & credits
   const validTxns = allTransactions.filter(t => !t.notATransaction && Number(t.amount) > 0);
   const currentMonthTxns = validTxns.filter(t => {
-    const d = new Date(t.date || t.rawDate);
-    return !isNaN(d.getTime()) && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    const d = parseTxnDate(t);
+    return d && d.getMonth() === month && d.getFullYear() === year;
   });
+
+  const prevMonth = month === 0 ? 11 : month - 1;
+  const prevYear = month === 0 ? year - 1 : year;
   const prevMonthTxns = validTxns.filter(t => {
-    const d = new Date(t.date || t.rawDate);
-    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    return !isNaN(d.getTime()) && d.getMonth() === prev.getMonth() && d.getFullYear() === prev.getFullYear();
+    const d = parseTxnDate(t);
+    return d && d.getMonth() === prevMonth && d.getFullYear() === prevYear;
   });
 
   const curSpending = currentMonthTxns.filter(t => t.type === 'debit').reduce((s, t) => s + Number(t.amount || 0), 0);
@@ -245,10 +313,10 @@ function renderDashboard() {
   }
 
   // Render SVG Hero Spending Chart
-  renderHeroChart(currentMonthTxns);
+  renderHeroChart(currentMonthTxns, activeCtx);
 
   // Insights / Activity Card
-  const insights = generateInsights(allTransactions);
+  const insights = generateInsights(allTransactions, activeCtx);
   const heroCard = document.getElementById('dashHeroInsightCard');
   if (insights.hero && heroCard) {
     heroCard.style.display = 'flex';
@@ -260,9 +328,9 @@ function renderDashboard() {
     heroCard.style.display = 'none';
   }
 
-  // Recent Transactions (top 5)
+  // Recent Transactions (top 6)
   const recentList = document.getElementById('dashRecentTxnList');
-  const recentItems = allTransactions.slice(0, 5);
+  const recentItems = allTransactions.slice(0, 6);
   if (recentItems.length === 0) {
     recentList.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--text-secondary);">No transactions recorded yet.</div>`;
   } else {
@@ -274,20 +342,19 @@ function renderDashboard() {
 }
 
 // ---- SVG Hero Spending Curve ----
-function renderHeroChart(txns = []) {
+function renderHeroChart(txns = [], activeCtx) {
   const svgLine = document.getElementById('chartLinePath');
   const svgArea = document.getElementById('chartAreaPath');
   if (!svgLine || !svgArea) return;
 
-  const now = new Date();
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const currentDay = now.getDate();
+  const { month, year } = activeCtx || getActiveMonthContext(txns);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
 
   // Aggregate daily cumulative debit spend
   const dailyTotals = {};
   txns.filter(t => t.type === 'debit').forEach(t => {
-    const d = new Date(t.date || t.rawDate);
-    if (!isNaN(d.getTime())) {
+    const d = parseTxnDate(t);
+    if (d && d.getMonth() === month && d.getFullYear() === year) {
       const day = d.getDate();
       dailyTotals[day] = (dailyTotals[day] || 0) + Number(t.amount || 0);
     }
@@ -295,9 +362,11 @@ function renderHeroChart(txns = []) {
 
   let running = 0;
   const points = [];
-  for (let d = 1; d <= currentDay; d++) {
-    running += (dailyTotals[d] || 0);
-    points.push({ day: d, val: running });
+  for (let d = 1; d <= daysInMonth; d++) {
+    if (dailyTotals[d]) {
+      running += dailyTotals[d];
+      points.push({ day: d, val: running });
+    }
   }
 
   if (points.length === 0 || running === 0) {
@@ -343,8 +412,8 @@ function renderTxnRowHtml(t) {
   const palette = avatarColorFor(t.merchant || t.bank || 'Txn');
   const initial = ((t.merchant || t.bank || 'T')[0] || 'T').toUpperCase();
 
-  const d = new Date(t.date || t.rawDate);
-  const dateStr = !isNaN(d.getTime()) ? d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'Recent';
+  const d = parseTxnDate(t);
+  const dateStr = d ? d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'Recent';
 
   let badge = '';
   if (t.needsReview) {
@@ -527,9 +596,10 @@ async function settleFriend(name) {
   }
 }
 
-// ---- 4. RENDER INSIGHTS SCREEN ----
+// ---- 5. RENDER INSIGHTS SCREEN ----
 function renderInsights() {
-  const insights = generateInsights(allTransactions);
+  const activeCtx = getActiveMonthContext(allTransactions);
+  const insights = generateInsights(allTransactions, activeCtx);
 
   // Summary
   const summaryHeadline = document.getElementById('insightsSummaryHeadline');
@@ -583,59 +653,6 @@ function renderInsights() {
   }
 }
 
-// ---- 5. RENDER REVIEW QUEUE SCREEN ----
-function renderReviewQueue() {
-  const needsReviewItems = allTransactions.filter(t => t.needsReview || t.unparsed);
-  const queueWrap = document.getElementById('reviewQueueList');
-  const badge = document.getElementById('reviewTabBadge');
-
-  if (badge) {
-    if (needsReviewItems.length > 0) {
-      badge.style.display = 'block';
-    } else {
-      badge.style.display = 'none';
-    }
-  }
-
-  if (queueWrap) {
-    if (needsReviewItems.length === 0) {
-      queueWrap.innerHTML = `
-        <div class="card" style="text-align: center; padding: 40px var(--space-xl);">
-          <div style="font-size: 32px; margin-bottom: 12px;">🎉</div>
-          <h3 class="heading-3">Review queue is empty</h3>
-          <p style="color: var(--text-secondary); font-size: 14px; margin-top: 4px;">All transactions have been classified and verified.</p>
-        </div>
-      `;
-    } else {
-      queueWrap.innerHTML = needsReviewItems.map(item => `
-        <div class="card" style="margin-top: var(--space-md);">
-          <div class="caption" style="color: var(--warning);">UNPARSED MESSAGE</div>
-          <div style="font-size: 15px; font-weight: 700; margin-top: 6px;">${escapeHtml(item.sender || 'Unknown Sender')}</div>
-          <div class="raw-box" style="margin-top: 8px; margin-bottom: 12px;">${escapeHtml(item.rawText || item.text || 'No text')}</div>
-          
-          <div style="display: flex; gap: var(--space-sm);">
-            <button class="btn btn-primary" style="flex: 1;" onclick="retryAi('${item.id}')">Retry AI Fallback</button>
-            <button class="btn btn-secondary" style="flex: 1;" onclick="openDetailSheet('${item.id}')">Manual Edit</button>
-          </div>
-        </div>
-      `).join('');
-    }
-  }
-}
-
-async function retryAi(txnId) {
-  showToast('Running AI extraction...');
-  try {
-    const res = await api('/retry-review', { method: 'POST', body: { transactionId: txnId } });
-    if (res.ok) {
-      showToast('AI extraction completed!');
-      await loadAllData();
-    }
-  } catch (err) {
-    alert(err.message);
-  }
-}
-
 // ---- TRANSACTION DETAIL SHEET ----
 function openDetailSheet(txnId) {
   const txn = allTransactions.find(t => t.id === txnId);
@@ -651,8 +668,8 @@ function openDetailSheet(txnId) {
   document.getElementById('sheetInstrument').textContent = txn.instrument || 'SMS/Email Alert';
   document.getElementById('sheetCategory').textContent = txn.category || 'General (tap to change)';
   
-  const d = new Date(txn.date || txn.rawDate);
-  document.getElementById('sheetDate').textContent = !isNaN(d.getTime()) ? d.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+  const d = parseTxnDate(txn);
+  document.getElementById('sheetDate').textContent = d ? d.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
   
   const refRow = document.getElementById('sheetRefRow');
   if (txn.refNo) {
@@ -666,7 +683,6 @@ function openDetailSheet(txnId) {
 
   // Raw Box
   const rawBox = document.getElementById('rawMessageBox');
-  const rawBtn = document.getElementById('rawToggleBtn');
   rawBox.textContent = txn.rawText || txn.text || '(No raw message body recorded)';
   rawBox.style.display = 'none';
   isRawExpanded = false;
@@ -752,8 +768,8 @@ function switchTab(tabId) {
   }
 }
 
-// ---- DOM WIRING ----
-document.addEventListener('DOMContentLoaded', () => {
+// ---- INITIALIZATION & DOM BINDING ----
+function init() {
   // Tabs
   document.querySelectorAll('.nav-tab').forEach(tab => {
     tab.addEventListener('click', () => switchTab(tab.dataset.tab));
@@ -840,9 +856,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Enter') attemptLogin();
   });
 
-  // Init
+  // Load data immediately
   loadAllData();
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
 
 function showLogin() {
   document.getElementById('loginScreen')?.classList.add('active');
