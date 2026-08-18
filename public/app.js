@@ -532,6 +532,9 @@ function renderTransactions() {
 }
 
 // ---- 3. RENDER SPLIT SCREEN ----
+let activeSplitTxn = null;
+let modalSelectedFriends = new Set();
+
 function renderSplitter() {
   // Friends list chips
   const friendsWrap = document.getElementById('friendsChipList');
@@ -559,22 +562,129 @@ function renderSplitter() {
 
   // Suggested group expenses
   const suggestedWrap = document.getElementById('suggestedSplitList');
-  const unsplit = allTransactions.filter(t => t.type === 'debit' && t.splitStatus === 'unsplit' && !t.needsReview && Number(t.amount) >= 150);
+  const unsplit = allTransactions.filter(t => t.type === 'debit' && t.splitStatus === 'unsplit' && !t.needsReview && Number(t.amount) >= 100);
   if (suggestedWrap) {
     if (unsplit.length === 0) {
       suggestedWrap.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--text-secondary); font-size: 14px;">You're all caught up! No unsplit group expenses.</div>`;
     } else {
-      suggestedWrap.innerHTML = unsplit.slice(0, 10).map(t => `
-        <div class="txn-row" style="cursor: default;">
+      suggestedWrap.innerHTML = unsplit.slice(0, 15).map(t => `
+        <div class="txn-row" style="cursor: pointer;" onclick="openSplitModal('${t.id}')">
           <div class="avatar-circle" style="background: #EEECFB; color: var(--primary);">🍽️</div>
           <div class="txn-info">
             <div class="txn-merchant">${escapeHtml(t.merchant || 'Expense')}</div>
             <div class="txn-sub">${money(t.amount)} · ${escapeHtml(t.category || 'Group')}</div>
           </div>
-          <button class="btn btn-primary" style="padding: 6px 12px; font-size: 12px;" onclick="openDetailSheet('${t.id}')">Split</button>
+          <button class="btn btn-primary" style="padding: 6px 14px; font-size: 12px;" onclick="event.stopPropagation(); openSplitModal('${t.id}')">Split</button>
         </div>
       `).join('');
     }
+  }
+}
+
+// ---- SPLIT MODAL LOGIC ----
+function openSplitModal(txnId) {
+  const txn = allTransactions.find(t => String(t.id) === String(txnId));
+  if (!txn) {
+    showToast('Select a valid transaction to split.');
+    return;
+  }
+  activeSplitTxn = txn;
+  modalSelectedFriends = new Set(allFriends.map(f => f.name));
+
+  const amountEl = document.getElementById('splitModalAmount');
+  if (amountEl) amountEl.textContent = moneyPrecise(txn.amount);
+
+  const merchEl = document.getElementById('splitModalMerchant');
+  if (merchEl) merchEl.textContent = `${txn.merchant || txn.sourceParser || 'Expense'} (${txn.category || 'General'})`;
+
+  renderSplitModalFriends();
+  recalculateSplit();
+
+  const overlay = document.getElementById('splitModalOverlay');
+  if (overlay) {
+    overlay.style.display = 'flex';
+    requestAnimationFrame(() => overlay.classList.add('active'));
+  }
+}
+
+function closeSplitModal() {
+  const overlay = document.getElementById('splitModalOverlay');
+  if (overlay) {
+    overlay.classList.remove('active');
+    setTimeout(() => { overlay.style.display = 'none'; }, 250);
+  }
+}
+
+function renderSplitModalFriends() {
+  const list = document.getElementById('splitModalFriendsList');
+  if (!list) return;
+  if (allFriends.length === 0) {
+    list.innerHTML = `<span style="font-size: 13px; color: var(--text-muted); padding: 6px 0;">No friends added yet. Type a name above to add.</span>`;
+    return;
+  }
+  list.innerHTML = allFriends.map(f => {
+    const isSelected = modalSelectedFriends.has(f.name);
+    return `<div class="friend-chip ${isSelected ? 'selected' : ''}" style="cursor: pointer;" onclick="toggleModalFriend('${escapeHtml(f.name)}')">
+      ${isSelected ? '✓ ' : '+ '}${escapeHtml(f.name)}
+    </div>`;
+  }).join('');
+}
+
+function toggleModalFriend(name) {
+  if (modalSelectedFriends.has(name)) modalSelectedFriends.delete(name);
+  else modalSelectedFriends.add(name);
+  renderSplitModalFriends();
+  recalculateSplit();
+}
+
+function recalculateSplit() {
+  if (!activeSplitTxn) return;
+  const numFriends = modalSelectedFriends.size;
+  const numPeople = numFriends + 1; // You + friends
+  const amt = Number(activeSplitTxn.amount || 0);
+  const share = numPeople > 0 ? (amt / numPeople) : 0;
+
+  const peopleEl = document.getElementById('splitNumPeople');
+  if (peopleEl) {
+    peopleEl.textContent = numFriends === 0 ? 'Just you (1 person)' : `You + ${numFriends} friend${numFriends > 1 ? 's' : ''} (${numPeople} people total)`;
+  }
+
+  const eachEl = document.getElementById('splitEachAmount');
+  if (eachEl) {
+    eachEl.textContent = `${moneyPrecise(share)} / person`;
+  }
+}
+
+async function confirmSplit() {
+  if (!activeSplitTxn) return;
+  const friends = Array.from(modalSelectedFriends);
+  if (friends.length === 0) {
+    alert('Please select at least one friend to split with.');
+    return;
+  }
+  try {
+    await api('/split', {
+      method: 'POST',
+      body: { transactionId: activeSplitTxn.id, friends }
+    });
+    closeSplitModal();
+    const shareAmt = (activeSplitTxn.amount / (friends.length + 1)).toFixed(2);
+    showToast(`Recorded in Ledger! Each friend owes ₹${shareAmt}`);
+    await loadAllData();
+    switchTab('ledger');
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+async function settleFriend(name) {
+  if (!confirm(`Settle balance with ${name}?`)) return;
+  try {
+    await api('/settle', { method: 'POST', body: { friendName: name } });
+    showToast(`Settled up with ${name}!`);
+    await loadAllData();
+  } catch (err) {
+    alert(err.message);
   }
 }
 
@@ -621,18 +731,6 @@ function renderLedger() {
   }
 }
 
-async function settleFriend(name) {
-  if (!confirm(`Settle full balance for ${name}?`)) return;
-  try {
-    await api('/settle', { method: 'POST', body: { friendName: name } });
-    showToast(`Settled with ${name}!`);
-    await loadAllData();
-  } catch (err) {
-    alert(err.message);
-  }
-}
-
-// ---- 5. RENDER INSIGHTS SCREEN ----
 // ---- 5. RENDER INSIGHTS SCREEN ----
 function renderInsights() {
   const activeCtx = getActiveMonthContext(allTransactions);
@@ -792,13 +890,7 @@ function openDetailSheet(txnId) {
   const splitBtn = document.getElementById('detailSplitBtn');
   if (splitBtn) {
     splitBtn.onclick = () => {
-      switchTab('splitter');
-      if (allFriends.length > 0) {
-        selectedFriendIds.clear();
-        allFriends.forEach(f => selectedFriendIds.add(f.name));
-        renderSplitter();
-        showToast(`Selected ${txn.merchant || 'expense'} for splitting!`);
-      }
+      openSplitModal(txn.id);
     };
   }
 
@@ -824,6 +916,11 @@ if (typeof window !== 'undefined') {
   window.openDetailSheet = openDetailSheet;
   window.setDetailCategory = setDetailCategory;
   window.switchTab = switchTab;
+  window.openSplitModal = openSplitModal;
+  window.closeSplitModal = closeSplitModal;
+  window.toggleModalFriend = toggleModalFriend;
+  window.confirmSplit = confirmSplit;
+  window.settleFriend = settleFriend;
 }
 
 async function setDetailCategory(cat) {
@@ -959,6 +1056,33 @@ function init() {
       openDetailSheet(row.dataset.id);
     }
   });
+
+  // Split Modal Button Bindings
+  document.getElementById('confirmSplitBtn')?.addEventListener('click', confirmSplit);
+  document.getElementById('cancelSplitBtn')?.addEventListener('click', closeSplitModal);
+  document.getElementById('splitModalOverlay')?.addEventListener('click', (e) => {
+    if (e.target.id === 'splitModalOverlay') closeSplitModal();
+  });
+
+  const splitAddFriendBtn = document.getElementById('splitAddFriendBtn');
+  const splitAddFriendInput = document.getElementById('splitAddFriendInput');
+  if (splitAddFriendBtn && splitAddFriendInput) {
+    const handleAddFriend = () => {
+      const name = splitAddFriendInput.value.trim();
+      if (!name) return;
+      if (!allFriends.some(f => f.name.toLowerCase() === name.toLowerCase())) {
+        allFriends.push({ name });
+      }
+      modalSelectedFriends.add(name);
+      splitAddFriendInput.value = '';
+      renderSplitModalFriends();
+      recalculateSplit();
+    };
+    splitAddFriendBtn.addEventListener('click', handleAddFriend);
+    splitAddFriendInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleAddFriend();
+    });
+  }
 
   // Category Cancel Modal Closer
   document.getElementById('categoryCancelBtn')?.addEventListener('click', () => {

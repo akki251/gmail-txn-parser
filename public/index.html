@@ -332,6 +332,47 @@
       </button>
     </nav>
 
+    <!-- Dedicated Split Builder Modal -->
+    <div id="splitModalOverlay" class="modal-overlay">
+      <div class="modal-sheet">
+        <div class="sheet-handle"></div>
+        <h3 class="heading-2" id="splitModalTitle">Split expense</h3>
+        <p style="color: var(--text-secondary); font-size: 14px; margin-top: 4px;" id="splitModalSubtitle">Divide bill with friends and record to ledger.</p>
+
+        <div class="card" style="margin-top: var(--space-md); text-align: center; padding: 20px;">
+          <div class="caption">TOTAL AMOUNT</div>
+          <div class="display-amount" id="splitModalAmount" style="font-size: 32px; margin: 4px 0;">₹0.00</div>
+          <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);" id="splitModalMerchant">Merchant</div>
+        </div>
+
+        <div class="section-header" style="margin-top: var(--space-md);">
+          <h2 class="heading-3">Select friends to split with</h2>
+        </div>
+        <div class="input-row" style="margin-bottom: var(--space-sm);">
+          <input type="text" id="splitAddFriendInput" class="app-input" placeholder="Add new friend name..." />
+          <button id="splitAddFriendBtn" class="btn btn-primary">Add</button>
+        </div>
+        <div class="friends-scroll" id="splitModalFriendsList" style="margin-bottom: var(--space-md);"></div>
+
+        <!-- Split calculation box -->
+        <div class="card" style="background: var(--surface); padding: 14px 16px; margin-bottom: var(--space-lg);">
+          <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 6px;">
+            <span style="color: var(--text-secondary);">Split between</span>
+            <span style="font-weight: 700;" id="splitNumPeople">You (1 person)</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 15px;">
+            <span style="color: var(--text-primary); font-weight: 700;">Each person's share</span>
+            <span style="font-weight: 800; color: var(--income);" id="splitEachAmount">₹0.00</span>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: var(--space-sm);">
+          <button id="confirmSplitBtn" class="btn btn-primary" style="flex: 2; padding: 14px;">Record to Ledger</button>
+          <button id="cancelSplitBtn" class="btn btn-secondary" style="flex: 1; padding: 14px;">Cancel</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Transaction Detail Sheet Modal -->
     <div id="detailModalOverlay" class="modal-overlay">
       <div class="modal-sheet" id="detailSheet">
