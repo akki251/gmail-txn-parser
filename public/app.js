@@ -459,7 +459,7 @@ function renderTxnRowHtml(t) {
   }
 
   return `
-    <div class="txn-row" data-id="${t.id}">
+    <div class="txn-row" data-id="${t.id}" onclick="openDetailSheet('${t.id}')">
       <div class="avatar-circle" style="background: ${palette.bg}; color: ${palette.fg};">
         ${initial}
       </div>
@@ -789,12 +789,23 @@ function openDetailSheet(txnId) {
   }
 
   // Switch views cleanly
-  document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+  document.querySelectorAll('.view').forEach(v => {
+    v.classList.add('hidden');
+    v.style.display = 'none';
+  });
   const detailView = document.getElementById('detailView');
   if (detailView) {
     detailView.classList.remove('hidden');
+    detailView.style.display = 'block';
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
+}
+
+// Expose globally on window for inline HTML onclick handlers
+if (typeof window !== 'undefined') {
+  window.openDetailSheet = openDetailSheet;
+  window.setDetailCategory = setDetailCategory;
+  window.switchTab = switchTab;
 }
 
 async function setDetailCategory(cat) {
@@ -838,11 +849,13 @@ function switchTab(tabId) {
 
   document.querySelectorAll('.view').forEach(view => {
     view.classList.add('hidden');
+    view.style.display = 'none';
   });
 
   const targetView = document.getElementById(viewMap[tabId]);
   if (targetView) {
     targetView.classList.remove('hidden');
+    targetView.style.display = 'block';
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 }
