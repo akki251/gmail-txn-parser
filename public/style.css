@@ -826,23 +826,24 @@ body {
 }
 
 .modal-overlay {
+  display: none;
   position: fixed;
   inset: 0;
-  z-index: 1000;
-  background: rgba(0, 0, 0, 0.45);
+  z-index: 10000;
+  background: rgba(17, 17, 17, 0.5);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  display: flex;
   align-items: flex-end;
   justify-content: center;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.25s ease;
+  transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .modal-overlay.active {
-  opacity: 1;
-  pointer-events: auto;
+  display: flex !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
 }
 
 #loginScreen.modal-overlay {
@@ -890,10 +891,12 @@ body {
   transform: translateY(100%);
   transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   box-shadow: var(--shadow-float);
+  border: 1px solid var(--border);
+  border-bottom: none;
 }
 
 .modal-overlay.active .modal-sheet {
-  transform: translateY(0);
+  transform: translateY(0) !important;
 }
 
 .sheet-handle {

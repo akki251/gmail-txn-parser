@@ -665,58 +665,97 @@ function renderInsights() {
 
 // ---- TRANSACTION DETAIL SHEET ----
 function openDetailSheet(txnId) {
-  const txn = allTransactions.find(t => t.id === txnId);
-  if (!txn) return;
+  const txn = allTransactions.find(t => String(t.id) === String(txnId));
+  if (!txn) {
+    console.warn('Transaction not found for ID:', txnId);
+    return;
+  }
   activeTxn = txn;
 
   const isDebit = txn.type === 'debit';
-  document.getElementById('sheetAmount').textContent = `${isDebit ? '−' : '+'}${moneyPrecise(txn.amount)}`;
-  document.getElementById('sheetAmount').style.color = isDebit ? 'var(--text-primary)' : 'var(--income)';
-  document.getElementById('sheetMerchant').textContent = txn.merchant || txn.sourceParser || 'Bank Transaction';
+  const amtEl = document.getElementById('sheetAmount');
+  if (amtEl) {
+    amtEl.textContent = `${isDebit ? '−' : '+'}${moneyPrecise(txn.amount)}`;
+    amtEl.style.color = isDebit ? 'var(--text-primary)' : 'var(--income)';
+  }
+  
+  const merchEl = document.getElementById('sheetMerchant');
+  if (merchEl) merchEl.textContent = txn.merchant || txn.sourceParser || 'Bank Transaction';
 
-  document.getElementById('sheetBank').textContent = txn.bank || '—';
-  document.getElementById('sheetInstrument').textContent = txn.instrument || 'SMS/Email Alert';
-  document.getElementById('sheetCategory').textContent = txn.category || 'General (tap to change)';
+  const bankEl = document.getElementById('sheetBank');
+  if (bankEl) bankEl.textContent = txn.bank || '—';
+
+  const instEl = document.getElementById('sheetInstrument');
+  if (instEl) instEl.textContent = txn.instrument || 'SMS/Email Alert';
+
+  const catEl = document.getElementById('sheetCategory');
+  if (catEl) catEl.textContent = txn.category || 'General (tap to change)';
   
   const d = parseTxnDate(txn);
-  document.getElementById('sheetDate').textContent = d ? d.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+  const dateEl = document.getElementById('sheetDate');
+  if (dateEl) dateEl.textContent = d ? d.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
   
   const refRow = document.getElementById('sheetRefRow');
-  if (txn.refNo) {
-    refRow.style.display = 'flex';
-    document.getElementById('sheetRefNo').textContent = txn.refNo;
-  } else {
-    refRow.style.display = 'none';
+  const refNoEl = document.getElementById('sheetRefNo');
+  if (refRow && refNoEl) {
+    if (txn.refNo) {
+      refRow.style.display = 'flex';
+      refNoEl.textContent = txn.refNo;
+    } else {
+      refRow.style.display = 'none';
+    }
   }
 
-  document.getElementById('sheetParser').textContent = txn.sourceParser || 'Deterministic';
+  const parserEl = document.getElementById('sheetParser');
+  if (parserEl) parserEl.textContent = txn.sourceParser || 'Deterministic';
 
   // Raw Box
   const rawBox = document.getElementById('rawMessageBox');
-  rawBox.textContent = txn.rawText || txn.text || '(No raw message body recorded)';
-  rawBox.style.display = 'none';
+  if (rawBox) {
+    rawBox.textContent = txn.rawText || txn.text || '(No raw message body recorded)';
+    rawBox.style.display = 'none';
+  }
   isRawExpanded = false;
 
   // Category change tap
-  document.getElementById('sheetCategory').onclick = () => openCategoryModal();
+  if (catEl) {
+    catEl.onclick = () => openCategoryModal();
+  }
 
   // Split button tap
-  document.getElementById('sheetSplitBtn').onclick = async () => {
-    closeDetailSheet();
-    switchTab('splitter');
-    if (allFriends.length > 0) {
-      selectedFriendIds.clear();
-      allFriends.forEach(f => selectedFriendIds.add(f.name));
-      renderSplitter();
-      showToast(`Selected ${txn.merchant} for splitting!`);
-    }
-  };
+  const splitBtn = document.getElementById('sheetSplitBtn');
+  if (splitBtn) {
+    splitBtn.onclick = () => {
+      closeDetailSheet();
+      switchTab('splitter');
+      if (allFriends.length > 0) {
+        selectedFriendIds.clear();
+        allFriends.forEach(f => selectedFriendIds.add(f.name));
+        renderSplitter();
+        showToast(`Selected ${txn.merchant || 'expense'} for splitting!`);
+      }
+    };
+  }
 
-  document.getElementById('detailModalOverlay').classList.add('active');
+  const overlay = document.getElementById('detailModalOverlay');
+  if (overlay) {
+    overlay.style.display = 'flex';
+    requestAnimationFrame(() => {
+      overlay.classList.add('active');
+    });
+  }
 }
 
 function closeDetailSheet() {
-  document.getElementById('detailModalOverlay').classList.remove('active');
+  const overlay = document.getElementById('detailModalOverlay');
+  if (overlay) {
+    overlay.classList.remove('active');
+    setTimeout(() => {
+      if (!overlay.classList.contains('active')) {
+        overlay.style.display = 'none';
+      }
+    }, 250);
+  }
 }
 
 // Category Picker Sheet
@@ -735,7 +774,13 @@ function openCategoryModal() {
     </button>
   `).join('');
 
-  document.getElementById('categoryModalOverlay').classList.add('active');
+  const overlay = document.getElementById('categoryModalOverlay');
+  if (overlay) {
+    overlay.style.display = 'flex';
+    requestAnimationFrame(() => {
+      overlay.classList.add('active');
+    });
+  }
 }
 
 async function setCategory(cat) {
@@ -743,8 +788,13 @@ async function setCategory(cat) {
   try {
     await api('/category', { method: 'POST', body: { transactionId: activeTxn.id, category: cat } });
     activeTxn.category = cat;
-    document.getElementById('sheetCategory').textContent = cat;
-    document.getElementById('categoryModalOverlay').classList.remove('active');
+    const catEl = document.getElementById('sheetCategory');
+    if (catEl) catEl.textContent = cat;
+    const overlay = document.getElementById('categoryModalOverlay');
+    if (overlay) {
+      overlay.classList.remove('active');
+      setTimeout(() => { overlay.style.display = 'none'; }, 250);
+    }
     showToast(`Updated to ${cat}`);
     await loadAllData();
   } catch (err) {
@@ -846,6 +896,15 @@ function init() {
     });
   }
 
+  // Global Transaction Row Click Delegation (Works everywhere instantly)
+  document.addEventListener('click', (e) => {
+    const row = e.target.closest('.txn-row');
+    if (row && row.dataset && row.dataset.id) {
+      if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
+      openDetailSheet(row.dataset.id);
+    }
+  });
+
   // Modal Closers
   document.getElementById('sheetCloseBtn')?.addEventListener('click', closeDetailSheet);
   document.getElementById('detailModalOverlay')?.addEventListener('click', (e) => {
@@ -853,7 +912,11 @@ function init() {
   });
 
   document.getElementById('categoryCancelBtn')?.addEventListener('click', () => {
-    document.getElementById('categoryModalOverlay')?.classList.remove('active');
+    const overlay = document.getElementById('categoryModalOverlay');
+    if (overlay) {
+      overlay.classList.remove('active');
+      setTimeout(() => { overlay.style.display = 'none'; }, 250);
+    }
   });
 
   // Raw toggle
