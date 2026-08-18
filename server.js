@@ -67,7 +67,10 @@ function parseCookies(req) {
 
 function isAuthed(req) {
   if (!process.env.APP_PASSWORD) return true; // no password configured -> auth disabled (local dev default)
-  const token = parseCookies(req).session;
+  const cookieToken = parseCookies(req).session;
+  const authHeader = req.headers.authorization || req.headers.Authorization || '';
+  const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+  const token = bearerToken || cookieToken;
   return !!token && sessions.has(token);
 }
 
@@ -273,9 +276,9 @@ async function handleApi(req, res, urlPath) {
       saveSessions(sessions);
       res.setHeader(
         'Set-Cookie',
-        `session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000${COOKIE_SECURE ? '; Secure' : ''}`
+        `session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000${COOKIE_SECURE ? '; Secure' : ''}`
       );
-      return sendJson(res, 200, { ok: true });
+      return sendJson(res, 200, { ok: true, token });
     }
 
     if (!isAuthed(req)) {

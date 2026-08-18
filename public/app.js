@@ -84,9 +84,17 @@ function parseTxnDate(item) {
 
 // API Helper
 async function api(path, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  if (options.body) headers['Content-Type'] = 'application/json';
+  
+  const savedToken = localStorage.getItem('txn_session_token');
+  if (savedToken) {
+    headers['Authorization'] = `Bearer ${savedToken}`;
+  }
+
   const res = await fetch('/api' + path, {
     method: options.method || 'GET',
-    headers: options.body ? { 'Content-Type': 'application/json' } : undefined,
+    headers,
     body: options.body ? JSON.stringify(options.body) : undefined,
     credentials: 'include',
   });
@@ -899,7 +907,10 @@ async function attemptLogin() {
   const errEl = document.getElementById('loginError');
   if (errEl) errEl.style.display = 'none';
   try {
-    await api('/login', { method: 'POST', body: { password: pwd } });
+    const data = await api('/login', { method: 'POST', body: { password: pwd } });
+    if (data && data.token) {
+      localStorage.setItem('txn_session_token', data.token);
+    }
     hideLogin();
     await loadAllData();
   } catch (err) {
