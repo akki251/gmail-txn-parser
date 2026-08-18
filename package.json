@@ -14,6 +14,8 @@
     "test:split": "node test-split-flow.js",
     "test:sms": "node test-sms.js",
     "test:nontransactional": "node test-nontransactional.js",
+    "test:parser": "node tests/parser.test.js",
+    "test:ci": "node tests/parser.test.js",
     "test:stats": "node test-pipeline-stats.js",
     "test:matching": "node test-matching-engine.js",
     "test:dedup": "node test-dedup-integration.js",
