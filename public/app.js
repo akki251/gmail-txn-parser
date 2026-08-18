@@ -862,10 +862,11 @@ function init() {
 
   // Login Gate
   document.getElementById('lockBtn')?.addEventListener('click', showLogin);
-  document.getElementById('loginSubmitBtn')?.addEventListener('click', attemptLogin);
-  document.getElementById('loginPasswordInput')?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') attemptLogin();
+  document.getElementById('loginForm')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    attemptLogin();
   });
+  document.getElementById('loginSubmitBtn')?.addEventListener('click', attemptLogin);
 
   // Load data immediately
   loadAllData();
@@ -902,21 +903,32 @@ function hideLogin() {
 
 async function attemptLogin() {
   const input = document.getElementById('loginPasswordInput');
+  const btn = document.getElementById('loginSubmitBtn');
   const pwd = input?.value;
   if (!pwd) return;
   const errEl = document.getElementById('loginError');
   if (errEl) errEl.style.display = 'none';
+  if (btn) {
+    btn.textContent = 'Unlocking...';
+    btn.disabled = true;
+  }
   try {
     const data = await api('/login', { method: 'POST', body: { password: pwd } });
     if (data && data.token) {
       localStorage.setItem('txn_session_token', data.token);
     }
     hideLogin();
+    showToast('Unlocked successfully!');
     await loadAllData();
   } catch (err) {
     if (errEl) {
       errEl.textContent = err.message || 'Incorrect password';
       errEl.style.display = 'block';
+    }
+  } finally {
+    if (btn) {
+      btn.textContent = 'Unlock Dashboard';
+      btn.disabled = false;
     }
   }
 }

@@ -799,22 +799,38 @@ body {
   pointer-events: auto;
 }
 
-#loginScreen {
+#loginScreen.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: rgba(17, 17, 17, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   align-items: center;
   justify-content: center;
   padding: var(--space-xl);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+#loginScreen.modal-overlay.active {
+  display: flex !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
 }
 
 #loginScreen .modal-sheet {
+  background: var(--surface);
   border-radius: var(--radius-xl);
-  max-width: 420px;
-  transform: scale(0.95);
-  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  padding: 32px 24px;
-}
-
-#loginScreen.active .modal-sheet {
-  transform: scale(1);
+  max-width: 400px;
+  width: 100%;
+  padding: 36px 24px 28px;
+  box-shadow: var(--shadow-float);
+  transform: scale(1) translateY(0) !important;
+  text-align: center;
+  border: 1px solid var(--border);
 }
 
 .modal-sheet {

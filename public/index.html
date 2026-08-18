@@ -334,12 +334,14 @@
     <!-- Login Modal Gate -->
     <div id="loginScreen" class="modal-overlay">
       <div class="modal-sheet" style="text-align: center;">
-        <div class="brand-badge" style="margin: 0 auto var(--space-md); width: 44px; height: 44px; font-size: 20px;">₹</div>
+        <div class="brand-badge" style="margin: 0 auto var(--space-md); width: 48px; height: 48px; font-size: 22px;">₹</div>
         <h2 class="heading-2">Password required</h2>
-        <p style="color: var(--text-secondary); font-size: 14px; margin-top: 4px; margin-bottom: var(--space-lg);">Enter app password to access your financial ledger.</p>
-        <input type="password" id="loginPasswordInput" class="app-input" placeholder="Password" style="margin-bottom: var(--space-md);" />
-        <div id="loginError" style="color: var(--expense); font-size: 13px; margin-bottom: var(--space-sm); display: none;">Incorrect password</div>
-        <button id="loginSubmitBtn" class="btn btn-primary" style="width: 100%;">Unlock</button>
+        <p style="color: var(--text-secondary); font-size: 14px; margin-top: 6px; margin-bottom: var(--space-xl);">Enter your app password to unlock your financial transactions.</p>
+        <form id="loginForm" onsubmit="return false;">
+          <input type="password" id="loginPasswordInput" class="app-input" placeholder="Enter password" style="width: 100%; margin-bottom: var(--space-md); text-align: center; font-size: 16px;" autofocus />
+          <div id="loginError" style="color: var(--expense); font-size: 13px; font-weight: 600; margin-bottom: var(--space-md); display: none;">Incorrect password</div>
+          <button type="submit" id="loginSubmitBtn" class="btn btn-primary" style="width: 100%; padding: 14px; font-size: 15px;">Unlock Dashboard</button>
+        </form>
       </div>
     </div>
 
