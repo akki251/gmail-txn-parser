@@ -1,5 +1,10 @@
 [
   {
+    "id": "sbi-card-ending-with-numeric-date-refno",
+    "sms": "Rs.299.00 spent on your SBI Credit Card ending with 4937 at SelfKYCPrepaid on 18-08-26 via UPI (Ref No. 915221377196). Trxn. not done by you? Report at https://sbicard.com/Dispute",
+    "expected": { "classification": "TRANSACTION", "type": "debit", "amount": 299 }
+  },
+  {
     "id": "original-axis-loan-offer",
     "sms": "Hi Customer, the clock is ticking. Avail your Axis Bank 24x7 Personal Loans offer of Rs.500000 starting @15.25% p.a. https://Axbk.in/AXISMR/Xy62ctGZROo T&C",
     "expected": { "classification": "NON_TRANSACTION" }

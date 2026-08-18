@@ -132,9 +132,11 @@ const SMS_PARSERS = [
     matchSender: (sender, text) => /SBICRD|SBICARD|SBI/i.test(sender || '') || /SBI Card/i.test(text || ''),
     parse: (text) => {
       // SBI Card: "Rs. 510.90 spent on your SBI Credit Card ending 5678 at JioRecharge on 24-Jul-26."
-      const re = /(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+spent on your SBI Credit Card ending\s+(\w+)\s+at\s+(.+?)\s+on\s+([\d]{1,2}-[\w]{3}-[\d]{2,4})/i;
+      // SBI Card: "Rs.299.00 spent on your SBI Credit Card ending with 4937 at SelfKYCPrepaid on 18-08-26 via UPI (Ref No. 915221377196)."
+      const re = /(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+spent on your SBI Credit Card ending\s+(?:with\s+)?(\w+)\s+at\s+(.+?)\s+on\s+([\d]{1,2}-[\w]{2,3}-[\d]{2,4})/i;
       const m = text.match(re);
       if (m) {
+        const refMatch = text.match(/Ref(?:\s*No\.?)?\s*(\d{6,})/i);
         return {
           bank: 'SBI Card',
           instrument: 'Credit Card',
@@ -143,6 +145,7 @@ const SMS_PARSERS = [
           currency: 'INR',
           merchant: m[3].trim(),
           rawDate: m[4],
+          refNo: refMatch ? refMatch[1] : null,
           type: 'debit',
           status: 'Approved',
         };
