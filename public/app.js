@@ -758,6 +758,9 @@ function switchTab(tabId) {
   document.querySelectorAll('.nav-tab').forEach(tab => {
     tab.classList.toggle('active', tab.dataset.tab === tabId);
   });
+  document.querySelectorAll('.top-nav-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.tab === tabId);
+  });
 
   const viewMap = {
     dashboard: 'dashboardView',
@@ -780,8 +783,8 @@ function switchTab(tabId) {
 
 // ---- INITIALIZATION & DOM BINDING ----
 function init() {
-  // Tabs
-  document.querySelectorAll('.nav-tab').forEach(tab => {
+  // Tabs (both top segmented bar and bottom navigation)
+  document.querySelectorAll('.nav-tab, .top-nav-tab').forEach(tab => {
     tab.addEventListener('click', () => switchTab(tab.dataset.tab));
   });
 

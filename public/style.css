@@ -99,6 +99,52 @@ body {
   border-bottom: 1px solid rgba(228, 228, 223, 0.6);
 }
 
+/* ---- Top Navigation Tab Bar ---- */
+.top-nav-bar {
+  position: sticky;
+  top: 58px;
+  z-index: 39;
+  display: flex;
+  background: var(--bg);
+  padding: 8px var(--space-xl) 10px;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.top-nav-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.top-nav-tab {
+  flex: 1;
+  padding: 8px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  text-align: center;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.top-nav-tab:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.top-nav-tab.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--white);
+  box-shadow: 0 2px 8px var(--primary-glow);
+}
+
 .brand-wrap {
   display: flex;
   align-items: center;
