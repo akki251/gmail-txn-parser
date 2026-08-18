@@ -178,8 +178,8 @@ function renderApp() {
   renderDashboard();
   renderTransactions();
   renderSplitter();
+  renderLedger();
   renderInsights();
-  renderReviewQueue();
 }
 
 // ---- 1. RENDER DASHBOARD (Exact Android Replica) ----
@@ -426,7 +426,7 @@ function renderTransactions() {
   }
 }
 
-// ---- 3. RENDER SPLITTER & LEDGER SCREEN ----
+// ---- 3. RENDER SPLIT SCREEN ----
 function renderSplitter() {
   // Friends list chips
   const friendsWrap = document.getElementById('friendsChipList');
@@ -459,7 +459,7 @@ function renderSplitter() {
     if (unsplit.length === 0) {
       suggestedWrap.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--text-secondary); font-size: 14px;">You're all caught up! No unsplit group expenses.</div>`;
     } else {
-      suggestedWrap.innerHTML = unsplit.slice(0, 8).map(t => `
+      suggestedWrap.innerHTML = unsplit.slice(0, 10).map(t => `
         <div class="txn-row" style="cursor: default;">
           <div class="avatar-circle" style="background: #EEECFB; color: var(--primary);">🍽️</div>
           <div class="txn-info">
@@ -471,25 +471,47 @@ function renderSplitter() {
       `).join('');
     }
   }
+}
 
-  // Ledger Balances
+// ---- 4. RENDER LEDGER SCREEN ----
+function renderLedger() {
   const ledgerWrap = document.getElementById('ledgerBalancesList');
+  const totalOwedEl = document.getElementById('ledgerTotalOwed');
   const balances = window._ledger || {};
   const names = Object.keys(balances);
+
+  let totalOwed = 0;
+  names.forEach(name => {
+    totalOwed += Math.max(0, Number(balances[name] || 0));
+  });
+
+  if (totalOwedEl) {
+    totalOwedEl.textContent = moneyPrecise(totalOwed);
+  }
+
   if (ledgerWrap) {
     if (names.length === 0) {
-      ledgerWrap.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--text-secondary); font-size: 14px;">Ledger is clear — nobody owes you anything right now.</div>`;
+      ledgerWrap.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--text-secondary); font-size: 14px;">Ledger is clear — nobody owes you anything right now.</div>`;
     } else {
-      ledgerWrap.innerHTML = names.map(name => `
-        <div class="txn-row" style="cursor: default;">
-          <div class="avatar-circle" style="background: var(--income-bg); color: var(--income);">👤</div>
-          <div class="txn-info">
-            <div class="txn-merchant">${escapeHtml(name)}</div>
-            <div class="txn-sub" style="color: var(--income); font-weight: 600;">owes you ${moneyPrecise(balances[name])}</div>
+      ledgerWrap.innerHTML = names.map(name => {
+        const bal = Number(balances[name] || 0);
+        const palette = avatarColorFor(name);
+        const initial = (name[0] || 'F').toUpperCase();
+        return `
+          <div class="txn-row" style="cursor: default;">
+            <div class="avatar-circle" style="background: ${palette.bg}; color: ${palette.fg};">
+              ${initial}
+            </div>
+            <div class="txn-info">
+              <div class="txn-merchant">${escapeHtml(name)}</div>
+              <div class="txn-sub" style="color: ${bal > 0 ? 'var(--income)' : 'var(--text-secondary)'}; font-weight: 600;">
+                ${bal > 0 ? `owes you ${moneyPrecise(bal)}` : `settled up (₹0.00)`}
+              </div>
+            </div>
+            ${bal > 0 ? `<button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" onclick="settleFriend('${escapeHtml(name)}')">Settle Up</button>` : ''}
           </div>
-          <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" onclick="settleFriend('${escapeHtml(name)}')">Settle Up</button>
-        </div>
-      `).join('');
+        `;
+      }).join('');
     }
   }
 }
@@ -715,8 +737,8 @@ function switchTab(tabId) {
     dashboard: 'dashboardView',
     transactions: 'transactionsView',
     splitter: 'splitterView',
+    ledger: 'ledgerView',
     insights: 'insightsView',
-    review: 'reviewView',
   };
 
   document.querySelectorAll('.view').forEach(view => {
