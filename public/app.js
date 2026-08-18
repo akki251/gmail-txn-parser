@@ -82,12 +82,28 @@ function parseTxnDate(item) {
   return null;
 }
 
+function getSavedToken() {
+  try {
+    return (typeof window !== 'undefined' && window.localStorage) ? window.localStorage.getItem('txn_session_token') : null;
+  } catch {
+    return null;
+  }
+}
+
+function setSavedToken(token) {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem('txn_session_token', token);
+    }
+  } catch {}
+}
+
 // API Helper
 async function api(path, options = {}) {
   const headers = { ...(options.headers || {}) };
   if (options.body) headers['Content-Type'] = 'application/json';
   
-  const savedToken = localStorage.getItem('txn_session_token');
+  const savedToken = getSavedToken();
   if (savedToken) {
     headers['Authorization'] = `Bearer ${savedToken}`;
   }
@@ -910,12 +926,7 @@ function init() {
     }
   });
 
-  // Modal Closers
-  document.getElementById('sheetCloseBtn')?.addEventListener('click', closeDetailSheet);
-  document.getElementById('detailModalOverlay')?.addEventListener('click', (e) => {
-    if (e.target.id === 'detailModalOverlay') closeDetailSheet();
-  });
-
+  // Category Cancel Modal Closer
   document.getElementById('categoryCancelBtn')?.addEventListener('click', () => {
     const overlay = document.getElementById('categoryModalOverlay');
     if (overlay) {
@@ -986,7 +997,7 @@ async function attemptLogin() {
   try {
     const data = await api('/login', { method: 'POST', body: { password: pwd } });
     if (data && data.token) {
-      localStorage.setItem('txn_session_token', data.token);
+      setSavedToken(data.token);
     }
     hideLogin();
     showToast('Unlocked successfully!');
