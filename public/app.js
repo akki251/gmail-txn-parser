@@ -755,6 +755,20 @@ function openDetailSheet(txnId) {
   const parserEl = document.getElementById('detailParser');
   if (parserEl) parserEl.textContent = txn.sourceParser || (txn.needsLLMFallback ? 'OpenRouter LLM' : 'Deterministic');
 
+  // Also populate modal sheet fallback elements
+  const sheetAmt = document.getElementById('sheetAmount');
+  if (sheetAmt) sheetAmt.textContent = `${isDebit ? '−' : '+'}${moneyPrecise(txn.amount)}`;
+  const sheetMerch = document.getElementById('sheetMerchant');
+  if (sheetMerch) sheetMerch.textContent = txn.merchant || txn.sourceParser || 'Bank Transaction';
+  const sheetBank = document.getElementById('sheetBank');
+  if (sheetBank) sheetBank.textContent = txn.bank || '—';
+  const sheetInst = document.getElementById('sheetInstrument');
+  if (sheetInst) sheetInst.textContent = txn.instrument || (txn.paymentMode ? txn.paymentMode.toUpperCase() : 'Alert');
+  const sheetCat = document.getElementById('sheetCategory');
+  if (sheetCat) sheetCat.textContent = txn.category || 'General';
+  const sheetDate = document.getElementById('sheetDate');
+  if (sheetDate) sheetDate.textContent = d ? d.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+
   // Render Category pills
   const catPillsContainer = document.getElementById('detailCategoryPills');
   if (catPillsContainer) {
@@ -799,6 +813,10 @@ function openDetailSheet(txnId) {
     detailView.style.display = 'block';
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
+
+  // Hide top segment nav while in dedicated detail view
+  const topNav = document.getElementById('topNavBar');
+  if (topNav) topNav.style.display = 'none';
 }
 
 // Expose globally on window for inline HTML onclick handlers
@@ -837,6 +855,9 @@ function switchTab(tabId) {
   document.querySelectorAll('.top-nav-tab').forEach(tab => {
     tab.classList.toggle('active', tab.dataset.tab === tabId);
   });
+
+  const topNav = document.getElementById('topNavBar');
+  if (topNav) topNav.style.display = 'flex';
 
   const viewMap = {
     dashboard: 'dashboardView',
