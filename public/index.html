@@ -3,111 +3,327 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Txn Splitter</title>
+  <title>Your Finances — Expense Tracker</title>
 
   <link rel="manifest" href="/manifest.json" />
   <link rel="apple-touch-icon" href="/icon-192.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Txn Splitter" />
-  <meta name="theme-color" content="#0a0e13" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="theme-color" content="#F5F5F2" />
 
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
-  <header class="topbar">
-    <h1>Txn Splitter</h1>
-    <button id="refreshBtn" class="refresh-btn" title="Fetch new transactions">⟳</button>
-  </header>
-
-  <main id="transactionsView" class="view">
-    <div class="hero-card">
-      <div class="hero-label">Spent this month</div>
-      <div class="hero-amount" id="heroAmount">₹0.00</div>
-      <div class="hero-sparkline" id="heroSparkline"></div>
-    </div>
-
-    <div class="filter-bar">
-      <select id="categoryFilter">
-        <option value="">All categories</option>
-      </select>
-      <div class="pill-group" id="dateFilterPills">
-        <button class="pill active" data-value="all">All</button>
-        <button class="pill" data-value="today">Today</button>
-        <button class="pill" data-value="week">Week</button>
-        <button class="pill" data-value="month">Month</button>
+  <div id="app-container">
+    <!-- Top Header Bar -->
+    <header class="topbar">
+      <div class="brand-wrap">
+        <div class="brand-badge">₹</div>
+        <span class="brand-title">Finances</span>
       </div>
-      <div class="pill-group" id="typeFilterPills">
-        <button class="pill active" data-value="">All</button>
-        <button class="pill" data-value="debit">Debit</button>
-        <button class="pill" data-value="credit">Credit</button>
+      <div class="topbar-actions">
+        <button id="refreshBtn" class="icon-btn" title="Sync / Fetch new transactions">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- 1. DASHBOARD VIEW (Exact Android Replica) -->
+    <main id="dashboardView" class="view">
+      <!-- Greeting & Primary Amount -->
+      <div class="caption greeting-caption" id="dashboardGreeting">GOOD MORNING</div>
+      <h1 class="heading-1">Your finances</h1>
+      <div class="display-amount" id="dashSpendingAmount">₹0</div>
+      <div class="caption" style="margin-top: 4px; color: var(--text-muted);">SPENT THIS MONTH</div>
+      <div class="trend-badge" id="dashSpendingTrend"></div>
+
+      <!-- Hero Spending Overview Card -->
+      <div class="card overview-card">
+        <div class="card-header">
+          <div>
+            <div class="caption">SPENDING OVERVIEW</div>
+            <div class="overview-val" id="chartOverviewVal">₹0</div>
+          </div>
+          <span class="period-pill">THIS MONTH</span>
+        </div>
+        <div class="chart-container" id="heroChartContainer">
+          <svg id="heroChartSvg" class="chart-svg" viewBox="0 0 380 120" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="spendingFade" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#4338CA" stop-opacity="0.22" />
+                <stop offset="100%" stop-color="#4338CA" stop-opacity="0.0" />
+              </linearGradient>
+            </defs>
+            <line x1="0" y1="105" x2="380" y2="105" stroke="#E4E4DF" stroke-width="1" />
+            <line x1="0" y1="55" x2="380" y2="55" stroke="#E4E4DF" stroke-width="1" stroke-dasharray="3 5" />
+            <path id="chartAreaPath" d="" fill="url(#spendingFade)" />
+            <path id="chartLinePath" d="" fill="none" stroke="#4338CA" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          <div class="chart-labels" id="heroChartLabels">
+            <span>1</span>
+            <span id="chartMidLabel">15</span>
+            <span id="chartEndLabel">30</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Income / Spending Summary Row -->
+      <div class="summary-row">
+        <div class="card summary-card">
+          <div class="caption">INCOME</div>
+          <div class="summary-amount income" id="dashIncomeCardVal">+₹0</div>
+          <div class="summary-trend positive" id="dashIncomeTrend"></div>
+        </div>
+        <div class="card summary-card">
+          <div class="caption">SPENDING</div>
+          <div class="summary-amount" id="dashSpendingCardVal">−₹0</div>
+          <div class="summary-trend" id="dashSpendingCardTrend"></div>
+        </div>
+      </div>
+
+      <!-- Your Activity Insight Card -->
+      <div class="section-header">
+        <h2 class="heading-2">Your activity</h2>
+        <span class="caption">THIS MONTH</span>
+      </div>
+      <div class="card insight-card" id="dashHeroInsightCard" style="display: none;">
+        <div class="insight-icon-wrap" id="dashInsightIcon">✨</div>
+        <div class="insight-body">
+          <div class="caption insight-kicker" id="dashInsightKicker">RECURRING COSTS</div>
+          <div class="insight-title" id="dashInsightTitle">Subscriptions</div>
+          <div class="insight-desc" id="dashInsightDesc">Recurring payments detected from your history.</div>
+        </div>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A1A19B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="9 18 15 12 9 6"></polyline>
+        </svg>
+      </div>
+
+      <!-- Recent Transactions Section -->
+      <div class="section-header">
+        <h2 class="heading-2">Recent transactions</h2>
+        <button class="see-all-btn" id="seeAllTxnsBtn">See all →</button>
+      </div>
+      <div class="transaction-card" id="dashRecentTxnList">
+        <!-- Rows injected dynamically -->
+      </div>
+    </main>
+
+    <!-- 2. TRANSACTIONS VIEW (Exact Android Replica) -->
+    <main id="transactionsView" class="view hidden">
+      <h1 class="heading-1" style="margin-bottom: var(--space-md);">Transactions</h1>
+      
+      <!-- Search Input -->
+      <div class="search-input-wrap">
+        <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="text" id="txnSearchInput" class="search-input" placeholder="Search activity, merchants, notes..." />
+      </div>
+
+      <!-- Horizontal Filter Pills -->
+      <div class="pill-scroller" id="typeFilterPills">
+        <button class="pill-btn active" data-type="all">All</button>
+        <button class="pill-btn" data-type="debit">Debit</button>
+        <button class="pill-btn" data-type="credit">Credit</button>
+        <button class="pill-btn" data-type="needsReview">Needs Review</button>
+      </div>
+
+      <div class="pill-scroller" id="bankFilterPills" style="margin-top: var(--space-xs);">
+        <button class="pill-btn active" data-bank="all">All Banks</button>
+      </div>
+
+      <!-- Transaction List Grouped -->
+      <div class="transaction-card" id="fullTxnList" style="margin-top: var(--space-md);">
+        <!-- Injected dynamically -->
+      </div>
+    </main>
+
+    <!-- 3. SPLIT & LEDGER VIEW (Exact Android Replica) -->
+    <main id="splitterView" class="view hidden">
+      <h1 class="heading-1">Splitwise</h1>
+      <p style="color: var(--text-secondary); font-size: 15px; margin-top: 4px;">Split expenses with friends and track balances.</p>
+
+      <!-- Friends Management -->
+      <div class="card">
+        <div class="caption">FRIENDS</div>
+        <div class="input-row">
+          <input type="text" id="newFriendInput" class="app-input" placeholder="Add friend name..." />
+          <button id="addFriendBtn" class="btn btn-primary">Add</button>
+        </div>
+        <div class="friends-scroll" id="friendsChipList"></div>
+      </div>
+
+      <!-- Suggested Group Expenses -->
+      <div class="section-header">
+        <h2 class="heading-2">Suggested to split</h2>
+        <span class="caption">AUTO-DETECTED</span>
+      </div>
+      <div class="transaction-card" id="suggestedSplitList"></div>
+
+      <!-- Ledger Balances -->
+      <div class="section-header">
+        <h2 class="heading-2">Balances</h2>
+      </div>
+      <div class="transaction-card" id="ledgerBalancesList"></div>
+    </main>
+
+    <!-- 4. INSIGHTS VIEW (Exact Android Replica) -->
+    <main id="insightsView" class="view hidden">
+      <h1 class="heading-1">Insights</h1>
+      <div class="caption" style="margin-top: 4px; color: var(--text-secondary);">SPENDING INTELLIGENCE</div>
+
+      <!-- Monthly Summary Insight -->
+      <div class="card" id="insightsSummaryCard">
+        <div class="caption">MONTHLY SUMMARY</div>
+        <div class="heading-2" style="margin-top: 6px;" id="insightsSummaryHeadline">Analysing spending...</div>
+        <div style="font-size: 14px; color: var(--text-secondary); margin-top: 4px;" id="insightsSummaryDesc"></div>
+      </div>
+
+      <!-- Spend by Category -->
+      <div class="section-header">
+        <h2 class="heading-2">Spend by category</h2>
+        <span class="caption">THIS MONTH</span>
+      </div>
+      <div class="card" id="insightsCategoryCard" style="margin-top: 0;"></div>
+
+      <!-- Recurring Subscriptions -->
+      <div class="section-header">
+        <h2 class="heading-2">Recurring commitments</h2>
+      </div>
+      <div class="card" id="insightsRecurringCard" style="margin-top: 0;"></div>
+    </main>
+
+    <!-- 5. REVIEW QUEUE VIEW (Exact Android Replica) -->
+    <main id="reviewView" class="view hidden">
+      <h1 class="heading-1">Review queue</h1>
+      <p style="color: var(--text-secondary); font-size: 15px; margin-top: 4px;">Transactions needing confirmation or fallback resolution.</p>
+      
+      <div id="reviewQueueList" style="margin-top: var(--space-md);"></div>
+    </main>
+
+    <!-- Bottom Navigation Bar (5 Android-style Tabs) -->
+    <nav class="bottom-nav">
+      <button class="nav-tab active" data-tab="dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+          <polyline points="9 22 9 12 15 12 15 22"></polyline>
+        </svg>
+        <span>Finances</span>
+      </button>
+
+      <button class="nav-tab" data-tab="transactions">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <rect width="20" height="14" x="2" y="5" rx="2"></rect>
+          <line x1="2" x2="22" y1="10" y2="10"></line>
+        </svg>
+        <span>Txns</span>
+      </button>
+
+      <button class="nav-tab" data-tab="splitter">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+          <circle cx="9" cy="7" r="4"></circle>
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+        </svg>
+        <span>Split</span>
+      </button>
+
+      <button class="nav-tab" data-tab="insights">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3v18h18"></path>
+          <path d="m19 9-5 5-4-4-3 3"></path>
+        </svg>
+        <span>Insights</span>
+      </button>
+
+      <button class="nav-tab" data-tab="review">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
+          <line x1="12" y1="9" x2="12" y2="13"></line>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+        <span>Review</span>
+        <span class="tab-badge" id="reviewTabBadge" style="display: none;"></span>
+      </button>
+    </nav>
+
+    <!-- Transaction Detail Sheet Modal -->
+    <div id="detailModalOverlay" class="modal-overlay">
+      <div class="modal-sheet" id="detailSheet">
+        <div class="sheet-handle"></div>
+        <div class="sheet-amount" id="sheetAmount">−₹0.00</div>
+        <div class="sheet-merchant" id="sheetMerchant">Merchant</div>
+
+        <div class="detail-table">
+          <div class="detail-row">
+            <span class="label">BANK</span>
+            <span class="value" id="sheetBank">—</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">INSTRUMENT</span>
+            <span class="value" id="sheetInstrument">—</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">CATEGORY</span>
+            <span class="value" id="sheetCategory" style="color: var(--primary); cursor: pointer;">General</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">DATE</span>
+            <span class="value" id="sheetDate">—</span>
+          </div>
+          <div class="detail-row" id="sheetRefRow">
+            <span class="label">REF NO</span>
+            <span class="value" id="sheetRefNo">—</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">PARSER</span>
+            <span class="value" id="sheetParser">—</span>
+          </div>
+        </div>
+
+        <!-- Raw SMS / Email Collapsible Box -->
+        <button id="rawToggleBtn" class="raw-toggle-btn">
+          <span>View original message data</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div id="rawMessageBox" class="raw-box" style="display: none;"></div>
+
+        <!-- Action Buttons -->
+        <div style="display: flex; gap: var(--space-sm); margin-top: var(--space-md);">
+          <button id="sheetSplitBtn" class="btn btn-primary" style="flex: 1;">Split with friends</button>
+          <button id="sheetCloseBtn" class="btn btn-secondary" style="flex: 1;">Close</button>
+        </div>
       </div>
     </div>
-    <div id="txnList"></div>
-  </main>
 
-  <main id="ledgerView" class="view hidden">
-    <div id="ledgerList"></div>
-  </main>
-
-  <main id="trendsView" class="view hidden">
-    <div class="filter-bar">
-      <div class="pill-group" id="trendsPeriodPills">
-        <button class="pill" data-value="week">Week</button>
-        <button class="pill active" data-value="month">Month</button>
-        <button class="pill" data-value="all">All time</button>
+    <!-- Category Selector Sheet -->
+    <div id="categoryModalOverlay" class="modal-overlay">
+      <div class="modal-sheet">
+        <div class="sheet-handle"></div>
+        <h3 class="heading-3" style="margin-bottom: var(--space-md);">Select Category</h3>
+        <div id="categoryOptionList" style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-sm); margin-bottom: var(--space-lg);"></div>
+        <button id="categoryCancelBtn" class="btn btn-secondary" style="width: 100%;">Cancel</button>
       </div>
     </div>
-    <div id="statTiles" class="stat-tiles"></div>
-    <h4 class="chart-title">Daily spend</h4>
-    <div id="trendChart" class="chart-box"></div>
-    <h4 class="chart-title">Spend by category</h4>
-    <div id="categoryChart" class="chart-box"></div>
-  </main>
 
-  <main id="suggestedView" class="view hidden">
-    <p class="suggested-intro">Unsplit transactions that look like group expenses — category + amount heuristic, not a trained model.</p>
-    <div class="filter-bar">
-      <div class="pill-group" id="suggestedSortPills">
-        <button class="pill active" data-value="amount">Amount</button>
-        <button class="pill" data-value="date">Date</button>
+    <!-- Login Modal Gate -->
+    <div id="loginScreen" class="modal-overlay">
+      <div class="modal-sheet" style="text-align: center;">
+        <div class="brand-badge" style="margin: 0 auto var(--space-md); width: 44px; height: 44px; font-size: 20px;">₹</div>
+        <h2 class="heading-2">Password required</h2>
+        <p style="color: var(--text-secondary); font-size: 14px; margin-top: 4px; margin-bottom: var(--space-lg);">Enter app password to access your financial ledger.</p>
+        <input type="password" id="loginPasswordInput" class="app-input" placeholder="Password" style="margin-bottom: var(--space-md);" />
+        <div id="loginError" style="color: var(--expense); font-size: 13px; margin-bottom: var(--space-sm); display: none;">Incorrect password</div>
+        <button id="loginSubmitBtn" class="btn btn-primary" style="width: 100%;">Unlock</button>
       </div>
     </div>
-    <div id="suggestedList"></div>
-  </main>
 
-  <main id="detailView" class="view hidden">
-    <button id="detailBackBtn" class="back-btn">← Back</button>
-    <div id="detailContent"></div>
-  </main>
-
-  <nav class="bottom-nav">
-    <button class="tab active" data-tab="transactions"><span class="tab-icon">📋</span>Transactions</button>
-    <button class="tab" data-tab="suggested"><span class="tab-icon">💡</span>Suggested</button>
-    <button class="tab" data-tab="ledger"><span class="tab-icon">🤝</span>Ledger</button>
-    <button class="tab" data-tab="trends"><span class="tab-icon">📈</span>Trends</button>
-  </nav>
-
-  <div id="categorySheet" class="sheet hidden">
-    <div class="sheet-content">
-      <h3>Set category</h3>
-      <div id="categoryOptions" class="category-options"></div>
-      <div class="sheet-actions">
-        <button id="categorySheetCancelBtn" class="secondary">Cancel</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="toast" class="toast hidden"></div>
-
-  <div id="loginScreen" class="login-screen hidden">
-    <div class="login-box">
-      <h1>Txn Splitter</h1>
-      <p>Enter password to continue</p>
-      <input id="loginPasswordInput" type="password" placeholder="Password" autocomplete="current-password" />
-      <button id="loginSubmitBtn" class="primary">Log in</button>
-      <p id="loginError" class="login-error hidden">Incorrect password</p>
-    </div>
+    <!-- Toast message -->
+    <div id="toast" class="toast" style="display: none;"></div>
   </div>
 
   <script src="/app.js"></script>
