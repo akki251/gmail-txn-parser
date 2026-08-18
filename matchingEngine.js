@@ -111,6 +111,22 @@ async function matchSource(source, candidateTransactions, aiMatchFn) {
   const hardFiltered = candidateTransactions.filter((c) => passesHardFilters(source, c));
   if (hardFiltered.length === 0) return null;
 
+  // Level 1.5: one side has a refNo, the other has null (e.g. LLM didn't extract it).
+  // If bank+amount+type+last4 all agree within a tight window, treat as a reference match.
+  // This handles: SMS fell to LLM (no refNo in output) + email had refNo from regex.
+  if (source.refNo || hardFiltered.some(c => c.refNo)) {
+    const refSideMatch = hardFiltered.find(c => {
+      const oneHasRef = (source.refNo && !c.refNo) || (!source.refNo && c.refNo);
+      if (!oneHasRef) return false;
+      const sourceLast4 = lastFourOf(source);
+      const cLast4 = lastFourOf(c);
+      if (sourceLast4 && cLast4 && sourceLast4 !== cLast4) return false; // last4 mismatch = different card
+      const gapMs = timeGapMs(source.date, c.date);
+      return gapMs !== null && gapMs <= DETERMINISTIC_WINDOW_MS;
+    });
+    if (refSideMatch) return { matchedTransaction: refSideMatch, method: 'reference-partial', confidence: 0.92 };
+  }
+
   // Level 2: deterministic — same bank/amount/type (already guaranteed by
   // the hard filter) plus an exact merchant match, in a tight window.
   const deterministic = hardFiltered.find((c) => {

@@ -23,7 +23,8 @@ If it IS a valid transaction, output ONLY valid JSON, no preamble, no markdown f
   "merchant": string | null,
   "type": "debit" | "credit",
   "status": "Approved" | "Declined" | "Pending",
-  "rawDate": string | null
+  "rawDate": string | null,
+  "refNo": string | null
 }`;
 
 async function llmFallbackExtract(rawText) {
