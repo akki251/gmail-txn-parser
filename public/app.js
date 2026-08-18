@@ -88,6 +88,7 @@ async function api(path, options = {}) {
     method: options.method || 'GET',
     headers: options.body ? { 'Content-Type': 'application/json' } : undefined,
     body: options.body ? JSON.stringify(options.body) : undefined,
+    credentials: 'include',
   });
   if (res.status === 401 && path !== '/login') {
     showLogin();
@@ -852,6 +853,7 @@ function init() {
   });
 
   // Login Gate
+  document.getElementById('lockBtn')?.addEventListener('click', showLogin);
   document.getElementById('loginSubmitBtn')?.addEventListener('click', attemptLogin);
   document.getElementById('loginPasswordInput')?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') attemptLogin();
@@ -869,7 +871,10 @@ if (document.readyState === 'loading') {
 
 function showLogin() {
   const el = document.getElementById('loginScreen');
+  const lockBtn = document.getElementById('lockBtn');
+  if (lockBtn) lockBtn.style.display = 'flex';
   if (el) {
+    el.style.display = 'flex';
     el.classList.add('active');
     setTimeout(() => {
       document.getElementById('loginPasswordInput')?.focus();
@@ -879,7 +884,12 @@ function showLogin() {
 
 function hideLogin() {
   const el = document.getElementById('loginScreen');
-  if (el) el.classList.remove('active');
+  const lockBtn = document.getElementById('lockBtn');
+  if (lockBtn) lockBtn.style.display = 'none';
+  if (el) {
+    el.classList.remove('active');
+    el.style.display = 'none';
+  }
 }
 
 async function attemptLogin() {
