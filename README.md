@@ -46,13 +46,13 @@ LLM call only for the rare message a regex can't parse).
 ## Screenshots
 
 <p float="left">
-  <img src="screenshots/transactions.png" width="200" alt="Transactions tab" />
-  <img src="screenshots/suggested.png" width="200" alt="Suggested splits tab" />
-  <img src="screenshots/ledger.png" width="200" alt="Ledger tab" />
-  <img src="screenshots/trends.png" width="200" alt="Trends tab" />
+  <img src="screenshots/dashboard.png" width="190" alt="Finances Dashboard" />
+  <img src="screenshots/transactions.png" width="190" alt="Transactions list" />
+  <img src="screenshots/detail.png" width="190" alt="Transaction detail screen" />
+  <img src="screenshots/split.png" width="190" alt="Split expense modal" />
+  <img src="screenshots/ledger.png" width="190" alt="Ledger balances" />
+  <img src="screenshots/insights.png" width="190" alt="Insights breakdown" />
 </p>
-
-*(shown with synthetic demo data, not real transactions)*
 
 ## Quick start
 
