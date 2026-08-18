@@ -779,14 +779,13 @@ body {
   color: var(--white);
 }
 
-/* ---- Bottom Sheet / Modal ---- */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 100;
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -798,6 +797,24 @@ body {
 .modal-overlay.active {
   opacity: 1;
   pointer-events: auto;
+}
+
+#loginScreen {
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xl);
+}
+
+#loginScreen .modal-sheet {
+  border-radius: var(--radius-xl);
+  max-width: 420px;
+  transform: scale(0.95);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  padding: 32px 24px;
+}
+
+#loginScreen.active .modal-sheet {
+  transform: scale(1);
 }
 
 .modal-sheet {

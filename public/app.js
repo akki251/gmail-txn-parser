@@ -213,7 +213,7 @@ function generateInsights(txns = [], activeCtx) {
 async function loadAllData() {
   try {
     const [txns, categories, friends, ledgerData] = await Promise.all([
-      api('/transactions').catch(() => []),
+      api('/transactions'),
       api('/categories').catch(() => []),
       api('/friends').catch(() => []),
       api('/ledger').catch(() => ({})),
@@ -231,6 +231,7 @@ async function loadAllData() {
     allFriends = Array.isArray(friends) ? friends : [];
     window._ledger = ledgerData || {};
 
+    hideLogin();
     renderApp();
   } catch (err) {
     console.error('[Dashboard Load Error]:', err);
@@ -867,18 +868,34 @@ if (document.readyState === 'loading') {
 }
 
 function showLogin() {
-  document.getElementById('loginScreen')?.classList.add('active');
+  const el = document.getElementById('loginScreen');
+  if (el) {
+    el.classList.add('active');
+    setTimeout(() => {
+      document.getElementById('loginPasswordInput')?.focus();
+    }, 150);
+  }
+}
+
+function hideLogin() {
+  const el = document.getElementById('loginScreen');
+  if (el) el.classList.remove('active');
 }
 
 async function attemptLogin() {
-  const pwd = document.getElementById('loginPasswordInput')?.value;
+  const input = document.getElementById('loginPasswordInput');
+  const pwd = input?.value;
   if (!pwd) return;
+  const errEl = document.getElementById('loginError');
+  if (errEl) errEl.style.display = 'none';
   try {
     await api('/login', { method: 'POST', body: { password: pwd } });
-    document.getElementById('loginScreen')?.classList.remove('active');
-    loadAllData();
+    hideLogin();
+    await loadAllData();
   } catch (err) {
-    const errEl = document.getElementById('loginError');
-    if (errEl) errEl.style.display = 'block';
+    if (errEl) {
+      errEl.textContent = err.message || 'Incorrect password';
+      errEl.style.display = 'block';
+    }
   }
 }

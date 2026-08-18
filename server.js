@@ -37,12 +37,21 @@ function isRateLimited(req) {
 }
 
 // Session auth — only meaningful when this server is reachable publicly
-// (behind Caddy/HTTPS on the cloud deployment). Sessions live in memory
-// only; a restart just means logging in again, acceptable for a single
-// personal user. COOKIE_SECURE should be set once actually served over
-// HTTPS — plain http://localhost testing needs it unset, since browsers
-// never send a Secure cookie back over plain HTTP.
-const sessions = new Set();
+const SESSIONS_FILE = path.join(__dirname, '.sessions.json');
+function loadSessions() {
+  try {
+    if (fs.existsSync(SESSIONS_FILE)) {
+      return new Set(JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf-8')));
+    }
+  } catch {}
+  return new Set();
+}
+function saveSessions(set) {
+  try {
+    fs.writeFileSync(SESSIONS_FILE, JSON.stringify(Array.from(set)));
+  } catch {}
+}
+const sessions = loadSessions();
 const COOKIE_SECURE = process.env.COOKIE_SECURE === 'true';
 
 function parseCookies(req) {
@@ -261,6 +270,7 @@ async function handleApi(req, res, urlPath) {
 
       const token = crypto.randomBytes(32).toString('hex');
       sessions.add(token);
+      saveSessions(sessions);
       res.setHeader(
         'Set-Cookie',
         `session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000${COOKIE_SECURE ? '; Secure' : ''}`
