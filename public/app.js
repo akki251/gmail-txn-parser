@@ -161,7 +161,10 @@ function generateInsights(txns = [], activeCtx) {
     });
     return map;
   };
-  const curCats = getCats(currentMonthTxns);
+  let curCats = getCats(currentMonthTxns);
+  if (Object.keys(curCats).length === 0) {
+    curCats = getCats(debits);
+  }
   const prevCats = getCats(prevMonthTxns);
 
   // Recurring subscriptions heuristic
@@ -179,8 +182,8 @@ function generateInsights(txns = [], activeCtx) {
     const items = merchantMap[m];
     if (items.length >= 2) {
       const amt = Number(items[0].amount || 0);
-      const isConsistent = items.every(i => Math.abs(Number(i.amount) - amt) < (amt * 0.1));
-      if (isConsistent && amt >= 100) {
+      const isConsistent = items.every(i => Math.abs(Number(i.amount) - amt) < (amt * 0.15));
+      if (isConsistent && amt >= 50) {
         recurring.push({ merchant: m, amount: amt, count: items.length });
       }
     }
@@ -195,7 +198,7 @@ function generateInsights(txns = [], activeCtx) {
       type: 'recurring_payment',
       title: 'RECURRING COSTS',
       headline: `${money(recurringTotal)} in subscriptions`,
-      description: `${recurring.length} recurring commitments detected in your history.`
+      description: `${recurring.length} recurring commitments detected across your transactions.`
     };
   } else if (curTotal > 0 && prevTotal > 0 && curTotal > prevTotal) {
     const pct = Math.round(((curTotal - prevTotal) / prevTotal) * 100);
@@ -205,10 +208,17 @@ function generateInsights(txns = [], activeCtx) {
       headline: `Spending is up ${pct}%`,
       description: `You've spent ${money(curTotal)} this month compared to ${money(prevTotal)} last month.`
     };
+  } else {
+    hero = {
+      type: 'spending_trend',
+      title: 'FINANCIAL SNAPSHOT',
+      headline: `${money(curTotal || debits.reduce((s, t) => s + Number(t.amount || 0), 0))} total spending`,
+      description: `${debits.length} recorded debit expenses categorized.`
+    };
   }
 
   return {
-    curTotal,
+    curTotal: curTotal || debits.reduce((s, t) => s + Number(t.amount || 0), 0),
     prevTotal,
     curCats,
     prevCats,
@@ -607,6 +617,7 @@ async function settleFriend(name) {
 }
 
 // ---- 5. RENDER INSIGHTS SCREEN ----
+// ---- 5. RENDER INSIGHTS SCREEN ----
 function renderInsights() {
   const activeCtx = getActiveMonthContext(allTransactions);
   const insights = generateInsights(allTransactions, activeCtx);
@@ -615,27 +626,29 @@ function renderInsights() {
   const summaryHeadline = document.getElementById('insightsSummaryHeadline');
   const summaryDesc = document.getElementById('insightsSummaryDesc');
   if (summaryHeadline && summaryDesc) {
-    summaryHeadline.textContent = `${money(insights.curTotal)} spent this month`;
-    summaryDesc.textContent = `Across ${allTransactions.filter(t => t.type === 'debit').length} total recorded expenses.`;
+    summaryHeadline.textContent = `${money(insights.curTotal)} total recorded spending`;
+    summaryDesc.textContent = `Analyzed across ${allTransactions.filter(t => t.type === 'debit').length} expenses.`;
   }
 
   // Spend by Category
   const catCard = document.getElementById('insightsCategoryCard');
   if (catCard) {
     const cats = Object.entries(insights.curCats).sort((a, b) => b[1] - a[1]);
+    const totalCatSpend = cats.reduce((s, [, val]) => s + val, 0);
+
     if (cats.length === 0) {
-      catCard.innerHTML = `<div style="padding: 16px; color: var(--text-secondary);">No category data available yet.</div>`;
+      catCard.innerHTML = `<div style="padding: 16px; color: var(--text-secondary);">No category data recorded yet.</div>`;
     } else {
       catCard.innerHTML = cats.map(([cat, val]) => {
-        const pct = insights.curTotal > 0 ? Math.round((val / insights.curTotal) * 100) : 0;
+        const pct = totalCatSpend > 0 ? Math.round((val / totalCatSpend) * 100) : 0;
         return `
-          <div style="margin-bottom: 14px;">
-            <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; margin-bottom: 4px;">
+          <div style="margin-bottom: 16px;">
+            <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; margin-bottom: 6px;">
               <span>${escapeHtml(cat)}</span>
               <span>${money(val)} (${pct}%)</span>
             </div>
             <div style="width: 100%; height: 8px; background: #ECECE7; border-radius: 999px; overflow: hidden;">
-              <div style="width: ${pct}%; height: 100%; background: var(--primary); border-radius: 999px;"></div>
+              <div style="width: ${Math.max(pct, 3)}%; height: 100%; background: var(--primary); border-radius: 999px;"></div>
             </div>
           </div>
         `;
@@ -647,23 +660,25 @@ function renderInsights() {
   const recCard = document.getElementById('insightsRecurringCard');
   if (recCard) {
     if (insights.recurring.length === 0) {
-      recCard.innerHTML = `<div style="padding: 16px; color: var(--text-secondary);">No recurring subscriptions detected.</div>`;
+      recCard.innerHTML = `<div style="padding: 16px; color: var(--text-secondary);">No recurring commitments detected.</div>`;
     } else {
       recCard.innerHTML = insights.recurring.map(r => `
-        <div class="txn-row" style="cursor: default; padding: 10px 0; border-bottom: 1px solid var(--border-light);">
+        <div class="txn-row" style="cursor: default; padding: 12px 0; border-bottom: 1px solid var(--border-light);">
           <div class="avatar-circle" style="background: var(--primary-soft); color: var(--primary);">🔄</div>
           <div class="txn-info">
             <div class="txn-merchant">${escapeHtml(r.merchant)}</div>
             <div class="txn-sub">Detected ${r.count} times</div>
           </div>
-          <div class="txn-amount">−${money(r.amount)}/mo</div>
+          <div class="txn-amount" style="font-weight: 700;">−${money(r.amount)}/mo</div>
         </div>
       `).join('');
     }
   }
 }
 
-// ---- TRANSACTION DETAIL SHEET ----
+// ---- 6. DEDICATED TRANSACTION DETAIL SCREEN ----
+let previousTab = 'dashboard';
+
 function openDetailSheet(txnId) {
   const txn = allTransactions.find(t => String(t.id) === String(txnId));
   if (!txn) {
@@ -671,32 +686,43 @@ function openDetailSheet(txnId) {
     return;
   }
   activeTxn = txn;
+  previousTab = activeTab || 'dashboard';
 
   const isDebit = txn.type === 'debit';
-  const amtEl = document.getElementById('sheetAmount');
+  const palette = avatarColorFor(txn.merchant || txn.bank || 'Txn');
+  const initial = ((txn.merchant || txn.bank || 'T')[0] || 'T').toUpperCase();
+
+  // Populate dedicated detailView elements
+  const avatarEl = document.getElementById('detailAvatar');
+  if (avatarEl) {
+    avatarEl.textContent = initial;
+    avatarEl.style.background = palette.bg;
+    avatarEl.style.color = palette.fg;
+  }
+
+  const amtEl = document.getElementById('detailAmount');
   if (amtEl) {
     amtEl.textContent = `${isDebit ? '−' : '+'}${moneyPrecise(txn.amount)}`;
     amtEl.style.color = isDebit ? 'var(--text-primary)' : 'var(--income)';
   }
-  
-  const merchEl = document.getElementById('sheetMerchant');
+
+  const merchEl = document.getElementById('detailMerchant');
   if (merchEl) merchEl.textContent = txn.merchant || txn.sourceParser || 'Bank Transaction';
 
-  const bankEl = document.getElementById('sheetBank');
+  const catSubEl = document.getElementById('detailCategorySub');
+  if (catSubEl) catSubEl.textContent = `${txn.category || 'General'} · ${txn.status || 'Approved'}`;
+
+  const bankEl = document.getElementById('detailBank');
   if (bankEl) bankEl.textContent = txn.bank || '—';
 
-  const instEl = document.getElementById('sheetInstrument');
-  if (instEl) instEl.textContent = txn.instrument || 'SMS/Email Alert';
+  const instEl = document.getElementById('detailInstrument');
+  if (instEl) instEl.textContent = txn.instrument || (txn.paymentMode ? txn.paymentMode.toUpperCase() : 'Alert');
 
-  const catEl = document.getElementById('sheetCategory');
-  if (catEl) catEl.textContent = txn.category || 'General (tap to change)';
-  
-  const d = parseTxnDate(txn);
-  const dateEl = document.getElementById('sheetDate');
-  if (dateEl) dateEl.textContent = d ? d.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
-  
-  const refRow = document.getElementById('sheetRefRow');
-  const refNoEl = document.getElementById('sheetRefNo');
+  const accEl = document.getElementById('detailAccount');
+  if (accEl) accEl.textContent = (txn.last4 || txn.account) ? `•••• ${txn.last4 || txn.account}` : '—';
+
+  const refRow = document.getElementById('detailRefRow');
+  const refNoEl = document.getElementById('detailRefNo');
   if (refRow && refNoEl) {
     if (txn.refNo) {
       refRow.style.display = 'flex';
@@ -706,27 +732,36 @@ function openDetailSheet(txnId) {
     }
   }
 
-  const parserEl = document.getElementById('sheetParser');
-  if (parserEl) parserEl.textContent = txn.sourceParser || 'Deterministic';
+  const d = parseTxnDate(txn);
+  const dateEl = document.getElementById('detailDate');
+  if (dateEl) dateEl.textContent = d ? d.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 
-  // Raw Box
-  const rawBox = document.getElementById('rawMessageBox');
+  const parserEl = document.getElementById('detailParser');
+  if (parserEl) parserEl.textContent = txn.sourceParser || (txn.needsLLMFallback ? 'OpenRouter LLM' : 'Deterministic');
+
+  // Render Category pills
+  const catPillsContainer = document.getElementById('detailCategoryPills');
+  if (catPillsContainer) {
+    const defaultCats = [
+      'Food & Dining', 'Groceries', 'Shopping', 'Bills & Utilities', 'Entertainment',
+      'Travel', 'Investments', 'Transfers', 'Healthcare', 'Other'
+    ];
+    catPillsContainer.innerHTML = defaultCats.map(cat => {
+      const isSelected = (txn.category || 'Other') === cat;
+      return `<button class="pill-btn ${isSelected ? 'active' : ''}" onclick="setDetailCategory('${cat}')">${escapeHtml(cat)}</button>`;
+    }).join('');
+  }
+
+  // Raw body
+  const rawBox = document.getElementById('detailRawBox');
   if (rawBox) {
     rawBox.textContent = txn.rawText || txn.text || '(No raw message body recorded)';
-    rawBox.style.display = 'none';
-  }
-  isRawExpanded = false;
-
-  // Category change tap
-  if (catEl) {
-    catEl.onclick = () => openCategoryModal();
   }
 
-  // Split button tap
-  const splitBtn = document.getElementById('sheetSplitBtn');
+  // Split button
+  const splitBtn = document.getElementById('detailSplitBtn');
   if (splitBtn) {
     splitBtn.onclick = () => {
-      closeDetailSheet();
       switchTab('splitter');
       if (allFriends.length > 0) {
         selectedFriendIds.clear();
@@ -737,64 +772,28 @@ function openDetailSheet(txnId) {
     };
   }
 
-  const overlay = document.getElementById('detailModalOverlay');
-  if (overlay) {
-    overlay.style.display = 'flex';
-    requestAnimationFrame(() => {
-      overlay.classList.add('active');
-    });
+  // Switch views cleanly
+  document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+  const detailView = document.getElementById('detailView');
+  if (detailView) {
+    detailView.classList.remove('hidden');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 }
 
-function closeDetailSheet() {
-  const overlay = document.getElementById('detailModalOverlay');
-  if (overlay) {
-    overlay.classList.remove('active');
-    setTimeout(() => {
-      if (!overlay.classList.contains('active')) {
-        overlay.style.display = 'none';
-      }
-    }, 250);
-  }
-}
-
-// Category Picker Sheet
-function openCategoryModal() {
-  const container = document.getElementById('categoryOptionList');
-  if (!container || !activeTxn) return;
-
-  const defaultCats = [
-    'Food & Dining', 'Shopping', 'Utilities', 'Entertainment',
-    'Travel', 'Groceries', 'Healthcare', 'Transfers', 'Other'
-  ];
-
-  container.innerHTML = defaultCats.map(cat => `
-    <button class="btn btn-secondary" style="font-size: 13px; text-align: center;" onclick="setCategory('${cat}')">
-      ${escapeHtml(cat)}
-    </button>
-  `).join('');
-
-  const overlay = document.getElementById('categoryModalOverlay');
-  if (overlay) {
-    overlay.style.display = 'flex';
-    requestAnimationFrame(() => {
-      overlay.classList.add('active');
-    });
-  }
-}
-
-async function setCategory(cat) {
+async function setDetailCategory(cat) {
   if (!activeTxn) return;
   try {
     await api('/category', { method: 'POST', body: { transactionId: activeTxn.id, category: cat } });
     activeTxn.category = cat;
-    const catEl = document.getElementById('sheetCategory');
-    if (catEl) catEl.textContent = cat;
-    const overlay = document.getElementById('categoryModalOverlay');
-    if (overlay) {
-      overlay.classList.remove('active');
-      setTimeout(() => { overlay.style.display = 'none'; }, 250);
-    }
+    const catSubEl = document.getElementById('detailCategorySub');
+    if (catSubEl) catSubEl.textContent = `${cat} · ${activeTxn.status || 'Approved'}`;
+    
+    // Update active pill styling
+    document.querySelectorAll('#detailCategoryPills .pill-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.textContent === cat);
+    });
+    
     showToast(`Updated to ${cat}`);
     await loadAllData();
   } catch (err) {
@@ -818,6 +817,7 @@ function switchTab(tabId) {
     splitter: 'splitterView',
     ledger: 'ledgerView',
     insights: 'insightsView',
+    detail: 'detailView',
   };
 
   document.querySelectorAll('.view').forEach(view => {
@@ -895,6 +895,11 @@ function init() {
       }
     });
   }
+
+  // Dedicated Detail View Back Button
+  document.getElementById('detailBackBtn')?.addEventListener('click', () => {
+    switchTab(previousTab || 'dashboard');
+  });
 
   // Global Transaction Row Click Delegation (Works everywhere instantly)
   document.addEventListener('click', (e) => {

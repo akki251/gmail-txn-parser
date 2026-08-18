@@ -236,6 +236,72 @@
       <div class="card" id="insightsRecurringCard" style="margin-top: 0;"></div>
     </main>
 
+    <!-- 6. TRANSACTION DETAIL VIEW (Dedicated Full Screen) -->
+    <main id="detailView" class="view hidden">
+      <button id="detailBackBtn" class="see-all-btn" style="margin-bottom: var(--space-md); font-size: 15px; cursor: pointer;">
+        ← Back
+      </button>
+
+      <div class="card" style="text-align: center; padding: 28px 20px 24px;">
+        <div class="avatar-circle" id="detailAvatar" style="width: 54px; height: 54px; font-size: 22px; margin: 0 auto var(--space-sm);">T</div>
+        <div class="display-amount" id="detailAmount" style="font-size: 38px; margin: 6px 0;">−₹0.00</div>
+        <div class="heading-2" id="detailMerchant" style="margin-bottom: 4px;">Merchant</div>
+        <div style="font-size: 14px; color: var(--primary); font-weight: 700;" id="detailCategorySub">Category</div>
+      </div>
+
+      <!-- Transaction Properties List -->
+      <div class="section-header">
+        <h2 class="heading-2">Transaction details</h2>
+      </div>
+      <div class="card" style="padding: 0; overflow: hidden; margin-top: 0;">
+        <div style="padding: 14px 18px; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 12px; font-weight: 700; color: var(--text-muted);">BANK</span>
+          <span style="font-size: 14px; font-weight: 600;" id="detailBank">—</span>
+        </div>
+        <div style="padding: 14px 18px; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 12px; font-weight: 700; color: var(--text-muted);">INSTRUMENT</span>
+          <span style="font-size: 14px; font-weight: 600;" id="detailInstrument">—</span>
+        </div>
+        <div style="padding: 14px 18px; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 12px; font-weight: 700; color: var(--text-muted);">ACCOUNT / CARD</span>
+          <span style="font-size: 14px; font-weight: 600;" id="detailAccount">—</span>
+        </div>
+        <div id="detailRefRow" style="padding: 14px 18px; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 12px; font-weight: 700; color: var(--text-muted);">REF NUMBER</span>
+          <span style="font-size: 14px; font-weight: 600; font-family: monospace;" id="detailRefNo">—</span>
+        </div>
+        <div style="padding: 14px 18px; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 12px; font-weight: 700; color: var(--text-muted);">DATE & TIME</span>
+          <span style="font-size: 14px; font-weight: 600;" id="detailDate">—</span>
+        </div>
+        <div style="padding: 14px 18px; display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 12px; font-weight: 700; color: var(--text-muted);">SOURCE PARSER</span>
+          <span style="font-size: 14px; font-weight: 600;" id="detailParser">—</span>
+        </div>
+      </div>
+
+      <!-- Change Category Chips -->
+      <div class="section-header">
+        <h2 class="heading-2">Change category</h2>
+      </div>
+      <div class="card" style="padding: 16px; margin-top: 0;">
+        <div id="detailCategoryPills" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+      </div>
+
+      <!-- Raw SMS / Email Text Accordion -->
+      <div class="section-header">
+        <h2 class="heading-2">Original message data</h2>
+      </div>
+      <div class="card" style="padding: 16px; margin-top: 0;">
+        <div id="detailRawBox" style="font-size: 13px; line-height: 1.5; color: var(--text-secondary); background: #FAF9F6; padding: 14px; border-radius: var(--radius-md); word-break: break-word; font-family: monospace;"></div>
+      </div>
+
+      <!-- Action Button -->
+      <div style="margin-top: var(--space-lg); margin-bottom: var(--space-xl);">
+        <button id="detailSplitBtn" class="btn btn-primary" style="width: 100%; padding: 14px; font-size: 15px;">Split this expense with friends</button>
+      </div>
+    </main>
+
     <!-- Bottom Navigation Bar (5 Tabs with Ledger) -->
     <nav class="bottom-nav">
       <button class="nav-tab active" data-tab="dashboard">
