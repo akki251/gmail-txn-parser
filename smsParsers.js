@@ -9,43 +9,60 @@ const SMS_PARSERS = [
     name: 'ICICI Bank SMS',
     matchSender: (sender, text) => /ICICI/i.test(sender || '') || /ICICI/i.test(text || ''),
     parse: (text) => {
-      // Case 1: UPI debit
-      let re = /ICICI Bank (?:Acct|Account)\s*(\w+)\s+(?:has been\s+)?debited(?: for)?\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+on\s+([\d]{1,2}-[\w]{3}-[\d]{2,4});?\s*(.+?)\s+credited\.?\s*(?:UPI:?\s*(\d+))?/i;
+      // Case 1: UPI debit (e.g. "ICICI Bank Acct XX123 debited for Rs 230.33 on 19-Aug-26; Swiggy credited. UPI: 123456789012")
+      let re = /ICICI Bank (?:Acct|Account|A\/c)?\s*(\w+)?\s+(?:has been\s+)?debited(?: for| by)?\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+on\s+([\d]{1,2}-[\w]{3}-[\d]{2,4});?\s*(?:(.+?)\s+credited|(?:to|at)\s+([^.;]+))?\.?\s*(?:UPI:?\s*(\d+))?/i;
       let m = text.match(re);
       if (m) {
         return {
           bank: 'ICICI Bank',
           instrument: 'Account',
-          account: m[1],
+          account: m[1] || null,
           amount: parseFloat(m[2].replace(/,/g, '')),
           currency: 'INR',
-          merchant: m[4] ? m[4].trim() : null,
+          merchant: (m[4] || m[5]) ? (m[4] || m[5]).trim() : null,
           rawDate: m[3],
           paymentMode: 'UPI',
-          refNo: m[5] || null,
+          refNo: m[6] || null,
           type: 'debit',
           status: 'Approved',
         };
       }
 
-      // Case 2: Card debit
-      re = /(?:Rs\.?|INR)\s?([\d,]+\.?\d*)\s+debited from ICICI Bank (Prepaid Card|Debit Card|Credit Card|Card|Account)\s+(\w+)\s+on\s+([\d]{1,2}-\w{3}-\d{2,4})\.\s*Info-?\s*([^.]+)\./i;
+      // Case 2: Card debit / Spent (e.g. "Rs 230.33 debited from ICICI Bank Credit Card XX1234 on 19-Aug-26. Info: Swiggy")
+      re = /(?:Rs\.?|INR)\s?([\d,]+\.?\d*)\s+(?:debited from|spent on)\s+ICICI Bank (Prepaid Card|Debit Card|Credit Card|Card|Account)\s*(\w+)?\s+on\s+([\d]{1,2}-\w{3}-\d{2,4})(?:\.\s*Info-?\s*([^.]+?)(?:\.|$))?/i;
       m = text.match(re);
       if (m) {
         return {
           bank: 'ICICI Bank',
-          instrument: m[2].trim(),
-          last4: m[3],
+          instrument: m[2] ? m[2].trim() : 'Card',
+          last4: m[3] || null,
           amount: parseFloat(m[1].replace(/,/g, '')),
           currency: 'INR',
-          merchant: m[5].trim(),
+          merchant: m[5] ? m[5].trim() : null,
           rawDate: m[4],
           type: 'debit',
           status: 'Approved',
         };
       }
 
-      // Case 3: UPI incoming credit
+      // Case 3: Used for transaction at merchant (e.g. "Your ICICI Bank Credit Card XX1234 has been used for a transaction of INR 230.33 on 19-Aug-26 at SWIGGY")
+      re = /ICICI Bank (?:Credit Card|Debit Card|Card)\s*(\w+)?\s+(?:has been|was)?\s*used for (?:a )?transaction of\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+on\s+([\d]{1,2}-[\w]{3}-[\d]{2,4})\s+at\s+([^.]+)/i;
+      m = text.match(re);
+      if (m) {
+        return {
+          bank: 'ICICI Bank',
+          instrument: 'Credit Card',
+          last4: m[1] || null,
+          amount: parseFloat(m[2].replace(/,/g, '')),
+          currency: 'INR',
+          merchant: m[4] ? m[4].trim() : null,
+          rawDate: m[3],
+          type: 'debit',
+          status: 'Approved',
+        };
+      }
+
+      // Case 4: UPI incoming credit
       re = /Acct\s*(\w+)?\s*is credited with\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+on\s+([\d]{1,2}-[\w]{3}-[\d]{2,4})\s+from\s+(.+?)\.\s*UPI:?\s*(\d+)/i;
       m = text.match(re);
       if (m) {
@@ -64,8 +81,8 @@ const SMS_PARSERS = [
         };
       }
 
-      // Case 4: Generic ICICI Debit Fallback
-      re = /ICICI Bank (?:Acct|Account|Card)\s*(\w+)?\s*(?:debited|has been debited)\s*(?:for)?\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)/i;
+      // Case 5: Generic ICICI Debit Fallback
+      re = /ICICI Bank (?:Acct|Account|Card)\s*(\w+)?\s*(?:debited|has been debited|spent)\s*(?:for)?\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)/i;
       m = text.match(re);
       if (m) {
         return {
