@@ -143,8 +143,26 @@ function safeIsoDate(dStr) {
   if (!dStr) return new Date().toISOString();
   try {
     const parsed = new Date(dStr);
-    if (isNaN(parsed.getTime())) return new Date().toISOString();
-    return parsed.toISOString();
+    if (!isNaN(parsed.getTime())) return parsed.toISOString();
+
+    // Parse DD/MM/YYYY or DD-MM-YYYY formats commonly emitted by iOS Shortcuts
+    const ddmmyyyy = String(dStr).match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})(?:[,\s]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)?)?/i);
+    if (ddmmyyyy) {
+      let day = parseInt(ddmmyyyy[1], 10);
+      let month = parseInt(ddmmyyyy[2], 10) - 1;
+      let year = parseInt(ddmmyyyy[3], 10);
+      if (year < 100) year += 2000;
+      let hours = ddmmyyyy[4] ? parseInt(ddmmyyyy[4], 10) : 0;
+      let mins = ddmmyyyy[5] ? parseInt(ddmmyyyy[5], 10) : 0;
+      let secs = ddmmyyyy[6] ? parseInt(ddmmyyyy[6], 10) : 0;
+      const meridiem = ddmmyyyy[7] ? ddmmyyyy[7].toLowerCase() : null;
+      if (meridiem === 'pm' && hours < 12) hours += 12;
+      if (meridiem === 'am' && hours === 12) hours = 0;
+      const customDate = new Date(Date.UTC(year, month, day, hours, mins, secs));
+      if (!isNaN(customDate.getTime())) return customDate.toISOString();
+    }
+
+    return new Date().toISOString();
   } catch {
     return new Date().toISOString();
   }
