@@ -140,6 +140,42 @@ const SMS_PARSERS = [
         };
       }
 
+      // Case 3: HDFC Credit Card Debit: "Spent Rs.316 On HDFC Bank Card 6558 At SWIGGY FOOD On 2026-08-20:21:39:54"
+      re = /Spent\s+(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+On\s+HDFC Bank Card\s+(\w+)\s+At\s+(.+?)\s+On\s+([\d-]+(?::[\d:]+)?)/i;
+      m = text.match(re);
+      if (m) {
+        return {
+          bank: 'HDFC Bank',
+          instrument: 'Credit Card',
+          last4: m[2],
+          amount: parseFloat(m[1].replace(/,/g, '')),
+          currency: 'INR',
+          merchant: m[3].trim(),
+          rawDate: m[4],
+          type: 'debit',
+          status: 'Approved',
+          refNo: null,
+        };
+      }
+
+      // Case 4: HDFC UPI Send: "Sent Rs.1.00\nFrom HDFC Bank A/C *6770\nTo AKSHANSH SHRIVASTAVA\nOn 17/08/26\nRef 622935692991"
+      re = /Sent\s+(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+From\s+HDFC Bank A\/C\s+\*?(\w+)\s+To\s+(.+?)\s+On\s+([\d/]+)\s+Ref\s+(\d+)/i;
+      m = text.match(re);
+      if (m) {
+        return {
+          bank: 'HDFC Bank',
+          instrument: 'Account',
+          last4: m[2],
+          amount: parseFloat(m[1].replace(/,/g, '')),
+          currency: 'INR',
+          merchant: m[3].trim(),
+          rawDate: m[4],
+          type: 'debit',
+          status: 'Approved',
+          refNo: m[5],
+        };
+      }
+
       return null;
     },
   },

@@ -225,8 +225,11 @@ function listNeedsReview() {
 
 // Re-attempts LLM extraction on a stored needs-review record. On success,
 // the raw placeholder becomes a real transaction (fields merged in,
-// category computed, flag cleared). On failure, stays flagged with the
-// latest failure reason — never silently re-dropped.
+// category computed, flag cleared) — or, if the now-resolved fields match
+// an existing canonical transaction (e.g. the email arrived while this SMS
+// was stuck in review), the placeholder is deleted and the source is
+// attached to the existing transaction instead. On failure, stays flagged
+// with the latest failure reason — never silently re-dropped.
 async function retryNeedsReview(id) {
   const db = load();
   const txn = db.transactions[id];
@@ -240,6 +243,52 @@ async function retryNeedsReview(id) {
       save(db);
       return true;
     }
+
+    // Now that we have structured fields, check if this matches an
+    // existing canonical transaction that arrived via another channel
+    // while this source was stuck in needsReview.
+    const sourceType = db.sourceMessages[id] ? db.sourceMessages[id].sourceType : inferSourceType(txn.sourceParser);
+    const sourceRecord = {
+      bank: extracted.bank || null,
+      type: extracted.type,
+      amount: extracted.amount,
+      currency: extracted.currency,
+      merchant: extracted.merchant || null,
+      refNo: extracted.refNo || null,
+      last4: extracted.last4 || null,
+      account: extracted.account || null,
+      date: txn.date || null,
+      sourceType,
+    };
+
+    const candidates = Object.values(db.transactions)
+      .filter((t) => t.id !== id && !t.notATransaction && !t.needsReview)
+      .map((t) => ({
+        ...t,
+        sourceTypes: (t.sourceIds || [t.id])
+          .map((sid) => db.sourceMessages[sid] && db.sourceMessages[sid].sourceType)
+          .filter(Boolean),
+      }));
+
+    const aiMatchFn = process.env.OPENROUTER_API_KEY ? llmMatchTransactions : null;
+    const matchResult = await matchSource(sourceRecord, candidates, aiMatchFn);
+
+    if (matchResult) {
+      // Merge into the existing canonical transaction — attach this
+      // source and delete the needsReview placeholder.
+      const target = db.transactions[matchResult.matchedTransaction.id];
+      target.sourceIds = [...(target.sourceIds || [target.id]), id];
+      if (db.sourceMessages[id]) {
+        db.sourceMessages[id].matchedTransactionId = target.id;
+        db.sourceMessages[id].matchMethod = matchResult.method;
+        db.sourceMessages[id].matchConfidence = matchResult.confidence;
+      }
+      delete db.transactions[id];
+      save(db);
+      return true;
+    }
+
+    // No match — resolve in place as before.
     db.transactions[id] = {
       ...txn,
       ...extracted,

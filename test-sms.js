@@ -38,6 +38,16 @@ const fixtures = [
     text: 'Credit Alert!\nRs.1.00 credited to HDFC Bank A/c XX6770 on 17-08-26 from VPA 8966970633@ptyes (UPI 213469064050)',
   },
   {
+    label: 'HDFC Bank — credit card spend',
+    sender: 'HDFCBK-S',
+    text: 'Spent Rs.316 On HDFC Bank Card 6558 At SWIGGY FOOD On 2026-08-20:21:39:54.Not You? To Block+Reissue Call 18002586161/SMS BLOCK CC 6558 to 7308080808',
+  },
+  {
+    label: 'HDFC Bank — UPI send',
+    sender: 'HDFCBK-T',
+    text: 'Sent Rs.1.00\nFrom HDFC Bank A/C *6770\nTo AKSHANSH SHRIVASTAVA\nOn 17/08/26\nRef 622935692991\nNot You?\nCall 18002586161/SMS BLOCK UPI to 7308080808',
+  },
+  {
     label: 'Random personal text — should be IGNORED (not a bank sender)',
     sender: '+919876543210',
     text: 'Can I call you later?',

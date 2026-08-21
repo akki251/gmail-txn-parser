@@ -202,25 +202,35 @@ async function handleSmsIngest(req, res) {
     // Send HTTP 200 OK response IMMEDIATELY (prevents iOS Shortcut 10s HTTP timeout)
     sendJson(res, 200, { ok: true, stored: true, needsReview: true });
 
-    // Asynchronously resolve LLM fallback in background
+    // Asynchronously resolve LLM fallback in background — call the LLM
+    // FIRST, then store exactly once: resolved data if the LLM succeeds
+    // (goes straight through the matching engine, no needsReview gap),
+    // or a needsReview placeholder only if the LLM actually fails.
     (async () => {
       try {
-        await db.upsertTransaction(id, {
-          needsReview: true,
-          sourceParser: result.sourceParser,
-          rawText: result.rawText,
-          sender,
-        }, isoDate);
-
         const extracted = await llmFallbackExtract(result.rawText);
         stats.recordEvent('aiFallbackSuccess');
-        if (!extracted.notATransaction) {
-          const resolved = { ...extracted, sourceParser: result.sourceParser, needsLLMFallback: true };
-          await db.upsertTransaction(id, resolved, isoDate);
+        if (extracted.notATransaction) {
+          stats.recordEvent('filteredNotTransaction');
+          return;
         }
+        const resolved = { ...extracted, sourceParser: result.sourceParser, needsLLMFallback: true };
+        await db.upsertTransaction(id, resolved, isoDate);
       } catch (err) {
         stats.recordEvent('aiFallbackFailure');
         stats.recordEvent('needsReview');
+        // LLM failed — store as needsReview so the raw text isn't lost
+        // and retryNeedsReview can heal it on a future fetch run.
+        try {
+          await db.upsertTransaction(id, {
+            needsReview: true,
+            sourceParser: result.sourceParser,
+            rawText: result.rawText,
+            sender,
+          }, isoDate);
+        } catch (dbErr) {
+          console.error('[SMS Ingest needsReview DB Error]:', dbErr);
+        }
       }
     })();
     return;

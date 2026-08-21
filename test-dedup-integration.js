@@ -22,10 +22,18 @@ function cleanupAndExit(code) {
 }
 
 process.env.OPENROUTER_API_KEY = 'test-key-not-real';
+// Delegating mock: db.js destructures { llmFallbackExtract, llmMatchTransactions }
+// at import time, capturing direct references. To swap behaviour mid-test we
+// make those references delegate through a mutable object whose properties
+// we can replace later.
+const mockLlm = {
+  extract: async () => { throw new Error('not used in this test'); },
+  match: async () => ({ isMatch: false, confidence: 0 }),
+};
 require.cache[require.resolve('./llmFallback')] = {
   exports: {
-    llmFallbackExtract: async () => { throw new Error('not used in this test'); },
-    llmMatchTransactions: async () => ({ isMatch: false, confidence: 0 }),
+    llmFallbackExtract: async (...args) => mockLlm.extract(...args),
+    llmMatchTransactions: async (...args) => mockLlm.match(...args),
   },
 };
 
@@ -128,6 +136,51 @@ try {
   const stats = require('./pipelineStats').getStats();
   check('match attempts were recorded', stats.matchAttempts > 0);
   check('at least one deterministic cross-source match was recorded', stats.matchedByDeterministic >= 2);
+
+  // 8. retryNeedsReview: an SMS arrives, regex misses, LLM fails →
+  // needsReview placeholder. Then an email for the same payment arrives
+  // and creates a separate transaction (because needsReview is excluded
+  // from candidates). When retryNeedsReview later succeeds on the SMS,
+  // it must merge into the existing email transaction — not leave a
+  // permanent duplicate. (This is the exact bug that caused the live
+  // ₹316 SWIGGY duplicate on the GCP VM.)
+  const needsReviewId = 'hdfc-sms-needs-review';
+  const emailMatchId = 'hdfc-email-316';
+
+  // Step a: ingest SMS as needsReview (LLM failed, no structured fields)
+  await db.upsertTransaction(needsReviewId, {
+    needsReview: true,
+    sourceParser: 'HDFC Bank SMS',
+    rawText: 'Spent Rs.316 On HDFC Bank Card 6558 At SWIGGY FOOD On 2026-08-20:21:39:54',
+    sender: 'HDFCBK-S',
+  }, '2026-08-14T15:00:00Z');
+  check('SMS needsReview placeholder was created', db.getTransaction(needsReviewId) !== null);
+
+  // Step b: email for the same payment arrives (parses fine, but the SMS
+  // is excluded from matching candidates because needsReview: true)
+  const emailResult = await db.upsertTransaction(emailMatchId, {
+    bank: 'HDFC Bank', sourceParser: 'HDFC Bank', amount: 316, currency: 'INR',
+    merchant: 'SWIGGY FOOD', type: 'debit', status: 'Approved',
+    instrument: 'Credit Card', last4: '6558',
+  }, '2026-08-14T15:00:01Z');
+  check('email for same payment created a new (unmerged) transaction', emailResult === true);
+
+  // Step c: mock the LLM to return the correct extracted fields
+  mockLlm.extract = async () => ({
+    bank: 'HDFC Bank', amount: 316, currency: 'INR', merchant: 'SWIGGY FOOD',
+    type: 'debit', status: 'Approved', instrument: 'Credit Card', last4: '6558', refNo: null,
+  });
+
+  // Step d: retryNeedsReview should now merge the SMS into the email txn
+  const healed = await db.retryNeedsReview(needsReviewId);
+  check('retryNeedsReview succeeded', healed === true);
+  check('needsReview placeholder was deleted (merged, not standalone)', db.getTransaction(needsReviewId) === null);
+  const emailTxn = db.getTransaction(emailMatchId);
+  check('email transaction now has both sources', emailTxn !== null && emailTxn.sources.length === 2);
+  check('merged source includes the SMS id', emailTxn !== null && emailTxn.sources.some((s) => s.id === needsReviewId));
+
+  // Restore the mock to the non-functional version
+  mockLlm.extract = async () => { throw new Error('not used in this test'); };
 
   console.log(`\n${failures === 0 ? 'All checks passed.' : failures + ' check(s) FAILED.'}`);
   cleanupAndExit(failures === 0 ? 0 : 1);
