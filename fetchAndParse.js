@@ -56,14 +56,29 @@ async function main() {
   }
 
   const senderQuery = BANK_SENDERS.map((s) => `from:${s}`).join(' OR ');
-  const { data: list } = await gmail.users.messages.list({
-    userId: 'me',
-    q: `(${senderQuery}) newer_than:30d`,
-    maxResults: 50,
-  });
+  let messages = [];
+  let pageToken;
 
-  const messages = list.messages || [];
-  console.log(`Found ${messages.length} candidate messages from known bank senders.\n`);
+  // Process all pages using nextPageToken to prevent silent email omissions
+  do {
+    const { data } = await gmail.users.messages.list({
+      userId: 'me',
+      q: `(${senderQuery}) newer_than:30d`,
+      maxResults: 100,
+      pageToken,
+    });
+    stats.recordEvent('pagesFetched');
+
+    if (data.messages && data.messages.length > 0) {
+      messages.push(...data.messages);
+      for (let i = 0; i < data.messages.length; i++) {
+        stats.recordEvent('messagesDiscovered');
+      }
+    }
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+
+  console.log(`Found ${messages.length} candidate messages from known bank senders across all pages.\n`);
 
   const results = [];
   for (const ref of messages) {
@@ -72,6 +87,8 @@ async function main() {
     if (db.getTransaction(ref.id)) continue;
 
     const { data: msg } = await gmail.users.messages.get({ userId: 'me', id: ref.id, format: 'full' });
+    stats.recordEvent('messagesFetched');
+
     const headers = msg.payload.headers || [];
     const fromHeader = (headers.find((h) => h.name === 'From') || {}).value || '';
     const subject = (headers.find((h) => h.name === 'Subject') || {}).value || '';
@@ -83,11 +100,17 @@ async function main() {
     stats.recordEvent('emailProcessed');
 
     let result = parseTransactionEmail({ sender, subject, htmlBody, plaintextBody });
-    if (!result) continue;
-    if (result.notATransaction) {
-      stats.recordEvent('filteredNotTransaction');
+    if (!result) {
+      stats.recordEvent('transactionsRejected');
       continue;
     }
+    if (result.notATransaction) {
+      stats.recordEvent('filteredNotTransaction');
+      stats.recordEvent('transactionsRejected');
+      continue;
+    }
+
+    stats.recordEvent('messagesParsed');
 
     if (result.needsLLMFallback) {
       stats.recordEvent('aiFallbackCalled');
@@ -95,7 +118,11 @@ async function main() {
       try {
         const extracted = await llmFallbackExtract(result.rawText);
         stats.recordEvent('aiFallbackSuccess');
-        if (extracted.notATransaction) continue;
+        if (extracted.notATransaction) {
+          stats.recordEvent('filteredNotTransaction');
+          stats.recordEvent('transactionsRejected');
+          continue;
+        }
         result = { ...extracted, sourceParser: result.sourceParser, needsLLMFallback: true };
       } catch (err) {
         stats.recordEvent('aiFallbackFailure');
@@ -106,7 +133,6 @@ async function main() {
           sourceParser: result.sourceParser,
           rawText: result.rawText,
           sender,
-          lastFailureReason: err.message,
         }, isoDate);
         continue;
       }
@@ -114,12 +140,14 @@ async function main() {
       stats.recordEvent('deterministicMatch');
     }
 
-    const inserted = await db.upsertTransaction(ref.id, result, isoDate);
-    if (!inserted) continue; // already ingested on a previous run — idempotent, skip quietly
-
-    results.push(result);
-    const amt = typeof result.amount === 'number' ? `\u20B9${result.amount}` : '?';
-    console.log(`+ ${amt}  ${result.merchant || '(no merchant)'}  [${result.bank || result.sourceParser}]`);
+    const isNew = await db.upsertTransaction(ref.id, result, isoDate);
+    if (isNew) {
+      stats.recordEvent('transactionsProduced');
+      console.log(`+ ₹${result.amount}  ${result.merchant || '(no merchant)'}  [${result.bank || result.sourceParser}]`);
+      results.push(result);
+    } else {
+      stats.recordEvent('transactionsDeduplicated');
+    }
   }
 
   console.log(`\nStored ${results.length} new transactions out of ${messages.length} candidate messages.`);

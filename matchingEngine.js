@@ -38,26 +38,52 @@ function timeGapMs(dateA, dateB) {
   return Math.abs(new Date(dateA).getTime() - new Date(dateB).getTime());
 }
 
+function lastFourOf(record) {
+  return record.last4 || record.account || null;
+}
+
+/**
+ * P0 Safety Gate: Mandatory Identity Conflict Check.
+ * If both records have known identity information and that information
+ * conflicts, they must NEVER be merged automatically.
+ *
+ * Conflict checks happen BEFORE any similarity scoring.
+ */
+function hasConflict(a, b) {
+  if (!a || !b) return false;
+
+  // 1. Conflicting reference numbers (both present and not equal)
+  if (a.refNo && b.refNo && a.refNo !== b.refNo) {
+    return true;
+  }
+
+  // 2. Conflicting last4 or account numbers (both present and not equal)
+  const aLast4 = lastFourOf(a);
+  const bLast4 = lastFourOf(b);
+  if (aLast4 && bLast4 && aLast4 !== bLast4) {
+    return true;
+  }
+
+  // 3. Conflicting transaction direction / type (debit vs credit)
+  if (a.type && b.type && a.type !== b.type) {
+    return true;
+  }
+
+  // 4. Conflicting bank
+  if (a.bank && b.bank && a.bank !== b.bank) {
+    return true;
+  }
+
+  return false;
+}
+
 function passesHardFilters(source, candidate) {
-  // A bank-assigned reference number is supposed to be unique per real
-  // transaction — if BOTH sides have one and they differ, that's a strong
-  // signal these are genuinely different payments, and must block a merge
-  // even if amount/merchant/time otherwise align. (Level 1 already
-  // handles the positive case: same refNo -> match, before this is ever
-  // reached.)
-  if (source.refNo && candidate.refNo && source.refNo !== candidate.refNo) return false;
+  // Hard identity conflict gate: refNo, last4, bank, or type mismatch
+  if (hasConflict(source, candidate)) return false;
 
   // The entire point of levels 2-3 is reconciling ONE real payment
   // reported via TWO DIFFERENT channels (SMS + email) — not deduping two
-  // same-channel alerts. Two emails (or two SMS) with the same
-  // bank/amount/merchant a few minutes apart are very plausibly two
-  // genuinely separate real events: a declined card swipe retried
-  // shortly after, or two small manual transfers of the same round
-  // amount. Verified against real historical data: two such same-channel
-  // pairs existed (a declined ₹399 purchase retried ~4 min later; two ₹1
-  // test transfers ~5 min apart) and would have been incorrectly merged
-  // without this check. So: only allow levels 2-3 to consider a candidate
-  // that does NOT already have a source of this exact channel attached.
+  // same-channel alerts.
   if (candidate.sourceTypes && candidate.sourceTypes.includes(source.sourceType)) return false;
 
   return (
@@ -68,11 +94,9 @@ function passesHardFilters(source, candidate) {
   );
 }
 
-function lastFourOf(record) {
-  return record.last4 || record.account || null;
-}
-
 function scoreCandidate(source, candidate, windowMs) {
+  if (hasConflict(source, candidate)) return 0;
+
   const gapMs = timeGapMs(source.date, candidate.date);
   if (gapMs === null || gapMs > windowMs) return 0;
 
@@ -101,7 +125,7 @@ function scoreCandidate(source, candidate, windowMs) {
 
 // aiMatchFn(source, candidate) -> Promise<{isMatch: boolean, confidence: number}>
 async function matchSource(source, candidateTransactions, aiMatchFn) {
-  // Level 1: reference number.
+  // Level 1: reference number exact match.
   if (source.refNo) {
     const byRef = candidateTransactions.find((c) => c.refNo && c.refNo === source.refNo);
     if (byRef) return { matchedTransaction: byRef, method: 'reference', confidence: 1.0 };
@@ -112,25 +136,24 @@ async function matchSource(source, candidateTransactions, aiMatchFn) {
   if (hardFiltered.length === 0) return null;
 
   // Level 1.5: one side has a refNo, the other has null (e.g. LLM didn't extract it).
-  // If bank+amount+type+last4 all agree within a tight window, treat as a reference match.
-  // This handles: SMS fell to LLM (no refNo in output) + email had refNo from regex.
+  // If bank+amount+type+last4 all agree without conflict within a tight window, treat as a reference match.
   if (source.refNo || hardFiltered.some(c => c.refNo)) {
     const refSideMatch = hardFiltered.find(c => {
       const oneHasRef = (source.refNo && !c.refNo) || (!source.refNo && c.refNo);
       if (!oneHasRef) return false;
-      const sourceLast4 = lastFourOf(source);
-      const cLast4 = lastFourOf(c);
-      if (sourceLast4 && cLast4 && sourceLast4 !== cLast4) return false; // last4 mismatch = different card
+      if (hasConflict(source, c)) return false;
       const gapMs = timeGapMs(source.date, c.date);
       return gapMs !== null && gapMs <= DETERMINISTIC_WINDOW_MS;
     });
     if (refSideMatch) return { matchedTransaction: refSideMatch, method: 'reference-partial', confidence: 0.92 };
   }
 
-  // Level 2: deterministic — same bank/amount/type (already guaranteed by
-  // the hard filter) plus an exact merchant match, in a tight window.
+  // Level 2: deterministic strong structural match — same bank/amount/type
+  // (already guaranteed by passesHardFilters), no identity conflict,
+  // plus exact merchant match, in a tight window (<= 10 mins).
   const deterministic = hardFiltered.find((c) => {
     if (!source.merchant || !c.merchant) return false;
+    if (hasConflict(source, c)) return false;
     const gapMs = timeGapMs(source.date, c.date);
     return (
       merchantSimilarity(source.merchant, c.merchant) === 1 &&
@@ -141,22 +164,32 @@ async function matchSource(source, candidateTransactions, aiMatchFn) {
   if (deterministic) return { matchedTransaction: deterministic, method: 'deterministic', confidence: 0.95 };
 
   // Level 3: weighted score across a wider, bank-configured window.
+  // P0 SAFETY BOUNDARY: Fuzzy matching is allowed ONLY when there is:
+  //   1. NO IDENTITY CONFLICT (checked via hasConflict)
+  //   2. A STRONG IDENTITY ANCHOR (same last4/account or compatible refNo)
+  //   3. HIGH SIMILARITY (score >= SCORE_AUTO_MERGE_THRESHOLD)
+  // Merchant similarity alone can NEVER bridge an identity void.
   let best = null;
   for (const candidate of hardFiltered) {
+    if (hasConflict(source, candidate)) continue;
     const score = scoreCandidate(source, candidate, reconciliationWindowMs);
     if (!best || score > best.score) best = { candidate, score };
   }
 
-  if (best && best.score >= SCORE_AUTO_MERGE_THRESHOLD) {
+  const sourceLast4 = lastFourOf(source);
+  const bestCandidateLast4 = best ? lastFourOf(best.candidate) : null;
+  const hasStrongAnchor = Boolean(
+    (sourceLast4 && bestCandidateLast4 && sourceLast4 === bestCandidateLast4) ||
+    (source.refNo && best?.candidate.refNo && source.refNo === best.candidate.refNo)
+  );
+
+  if (best && best.score >= SCORE_AUTO_MERGE_THRESHOLD && hasStrongAnchor) {
     return { matchedTransaction: best.candidate, method: 'score', confidence: best.score };
   }
 
-  // Level 4: AI, only for the genuinely ambiguous band — never the
-  // default parser, only a last resort when levels 1-3 can't decide. A
-  // failed AI call must never break ingestion — it just means this
-  // ambiguous pair stays unmatched (two separate transactions), same as
-  // if no AI were configured at all.
-  if (best && best.score >= SCORE_AMBIGUOUS_FLOOR && aiMatchFn) {
+  // Level 4: AI Arbitration, only for the genuinely ambiguous band.
+  // Principle: Prefer false (separate transactions) when unsure.
+  if (best && best.score >= SCORE_AMBIGUOUS_FLOOR && aiMatchFn && !hasConflict(source, best.candidate)) {
     try {
       const aiResult = await aiMatchFn(source, best.candidate);
       if (aiResult && aiResult.isMatch) {
@@ -170,4 +203,12 @@ async function matchSource(source, candidateTransactions, aiMatchFn) {
   return null;
 }
 
-module.exports = { matchSource, scoreCandidate, passesHardFilters, SCORE_AUTO_MERGE_THRESHOLD, SCORE_AMBIGUOUS_FLOOR };
+module.exports = {
+  matchSource,
+  scoreCandidate,
+  passesHardFilters,
+  hasConflict,
+  lastFourOf,
+  SCORE_AUTO_MERGE_THRESHOLD,
+  SCORE_AMBIGUOUS_FLOOR,
+};

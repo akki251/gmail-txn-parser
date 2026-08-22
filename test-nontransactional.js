@@ -51,6 +51,32 @@ const fixtures = [
     text: "That's a hit! SGD 1.38 spent at Merchant Y with your Indian Bank One Credit Card xxXX6566. Reward points added.",
     expectFiltered: false,
   },
+  // --- P0 Mandatory Regression Tests ---
+  {
+    label: 'P0 Test 1: Completed transaction + failed previous mention — should NOT be filtered',
+    text: 'Your previous payment failed. Your new payment of INR 1,200 has been debited successfully.',
+    expectFiltered: false,
+  },
+  {
+    label: 'P0 Test 2: Completed transaction + future payment due text — should NOT be filtered',
+    text: 'Rs 500 spent on card ending 1234 at Swiggy. Payment will be due next month on 20-Sep-2026.',
+    expectFiltered: false,
+  },
+  {
+    label: 'P0 Test 3: Pure future payment — should be filtered',
+    text: 'Rs 500 will be debited tomorrow for your Netflix subscription mandate.',
+    expectFiltered: true,
+  },
+  {
+    label: 'P0 Test 4: Pure failed payment — should be filtered',
+    text: 'Rs 500 transaction failed at Merchant Z due to bank network error.',
+    expectFiltered: true,
+  },
+  {
+    label: 'P0 Test 5: OTP + Credit Limit footer + completed spend — should NOT be filtered',
+    text: 'Spent Rs.500 On HDFC Bank Card 6558 At ZOMATO. Security Note: Do not share OTP or passwords. Available Credit Limit: Rs 50,000.',
+    expectFiltered: false,
+  },
 ];
 
 let pass = 0;

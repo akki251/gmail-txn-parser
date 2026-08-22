@@ -20,6 +20,16 @@ const crypto = require('crypto');
 const STATS_PATH = path.join(__dirname, 'pipelineStats.json');
 
 const EMPTY_STATS = {
+  // Ingestion & Discovery metrics (P0 completeness tracking)
+  pagesFetched: 0,
+  messagesDiscovered: 0,
+  messagesFetched: 0,
+  messagesParsed: 0,
+  transactionsProduced: 0,
+  transactionsRejected: 0,
+  transactionsDeduplicated: 0,
+
+  // Channel processing counters
   smsProcessed: 0,
   emailProcessed: 0,
   filteredNotTransaction: 0,
@@ -28,6 +38,7 @@ const EMPTY_STATS = {
   aiFallbackSuccess: 0,
   aiFallbackFailure: 0,
   needsReview: 0,
+
   // Cross-source dedup/matching (source message -> canonical transaction),
   // distinct from the field-extraction stats above.
   matchAttempts: 0,

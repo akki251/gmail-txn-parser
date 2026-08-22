@@ -155,8 +155,69 @@ const cases = [
     aiMatchFn: failingAI,
     expect: { matched: false, throws: false },
   },
+  // --- P0 Mandatory Regression Tests ---
+  {
+    label: 'P0 Test: same amount + merchant + close time, but conflicting last4 (1234 vs 5678) -> NEVER MERGE',
+    source: source({ merchant: 'Swiggy', last4: '1234', date: '2026-08-14T10:31:00Z' }),
+    candidates: [txn({ merchant: 'Swiggy', last4: '5678', date: '2026-08-14T10:30:00Z' })],
+    aiMatchFn: alwaysMatchAI, // even if AI would match, hasConflict MUST block before AI
+    expect: { matched: false },
+  },
+  {
+    label: 'P0 Test: same amount + last4, but conflicting refNo (REF1 vs REF2) -> NEVER MERGE',
+    source: source({ last4: '1234', refNo: 'REF1' }),
+    candidates: [txn({ last4: '1234', refNo: 'REF2' })],
+    aiMatchFn: alwaysMatchAI,
+    expect: { matched: false },
+  },
+  {
+    label: 'P0 Test: fuzzy merchant match without strong identity anchor (no last4, no refNo) -> NO AUTO MERGE',
+    source: source({ merchant: 'Swiggy Food Express', last4: null, refNo: null, date: '2026-08-14T10:31:00Z' }),
+    candidates: [txn({ merchant: 'Swiggy Food', last4: null, refNo: null, date: '2026-08-14T10:30:00Z' })],
+    aiMatchFn: null,
+    expect: { matched: false },
+  },
+  {
+    label: 'P0 Test: fuzzy merchant match in ambiguous band (0.82) -> resolved by AI when provided',
+    source: source({ merchant: 'Swiggy Food Express', last4: '1234', date: '2026-08-14T10:31:00Z' }),
+    candidates: [txn({ merchant: 'Swiggy Food', last4: '1234', date: '2026-08-14T10:30:00Z' })],
+    aiMatchFn: alwaysMatchAI,
+    expect: { matched: true, method: 'ai' },
+  },
+  {
+    label: 'P0 Test: score >= 0.85 WITH strong identity anchor (same last4) -> auto-merges with method: score',
+    source: source({ merchant: null, last4: '1234', date: '2026-08-14T10:31:00Z' }),
+    candidates: [txn({ merchant: null, last4: '1234', date: '2026-08-14T10:30:00Z' })],
+    aiMatchFn: null,
+    expect: { matched: true, method: 'score' },
+  },
 ];
 
+const { hasConflict } = require('./matchingEngine');
+
+// Direct unit test for hasConflict
+console.log('--- hasConflict Unit Tests ---');
+const conf1 = hasConflict({ last4: '1234' }, { last4: '5678' });
+console.log(`${conf1 ? '✓' : '✗'} last4 conflict (1234 vs 5678) detected: ${conf1}`);
+if (!conf1) process.exit(1);
+
+const conf2 = hasConflict({ refNo: 'R1' }, { refNo: 'R2' });
+console.log(`${conf2 ? '✓' : '✗'} refNo conflict (R1 vs R2) detected: ${conf2}`);
+if (!conf2) process.exit(1);
+
+const conf3 = hasConflict({ type: 'debit' }, { type: 'credit' });
+console.log(`${conf3 ? '✓' : '✗'} type conflict (debit vs credit) detected: ${conf3}`);
+if (!conf3) process.exit(1);
+
+const conf4 = hasConflict({ bank: 'HDFC Bank' }, { bank: 'ICICI Bank' });
+console.log(`${conf4 ? '✓' : '✗'} bank conflict (HDFC vs ICICI) detected: ${conf4}`);
+if (!conf4) process.exit(1);
+
+const conf6 = hasConflict({ last4: '1234', refNo: 'R1' }, { last4: '1234', refNo: 'R1' });
+console.log(`${!conf6 ? '✓' : '✗'} no conflict when identity agrees: ${!conf6}`);
+if (conf6) process.exit(1);
+
+console.log('\n--- matchSource Test Cases ---');
 (async () => {
   let pass = 0;
   for (const c of cases) {

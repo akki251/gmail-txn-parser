@@ -214,8 +214,12 @@ async function handleSmsIngest(req, res) {
           stats.recordEvent('filteredNotTransaction');
           return;
         }
-        const resolved = { ...extracted, sourceParser: result.sourceParser, needsLLMFallback: true };
-        await db.upsertTransaction(id, resolved, isoDate);
+        const isNew = await db.upsertTransaction(id, resolved, isoDate);
+        if (isNew) {
+          stats.recordEvent('transactionsProduced');
+        } else {
+          stats.recordEvent('transactionsDeduplicated');
+        }
       } catch (err) {
         stats.recordEvent('aiFallbackFailure');
         stats.recordEvent('needsReview');
@@ -241,7 +245,12 @@ async function handleSmsIngest(req, res) {
 
   (async () => {
     try {
-      await db.upsertTransaction(id, result, isoDate);
+      const isNew = await db.upsertTransaction(id, result, isoDate);
+      if (isNew) {
+        stats.recordEvent('transactionsProduced');
+      } else {
+        stats.recordEvent('transactionsDeduplicated');
+      }
     } catch (err) {
       console.error('[SMS Ingest DB Error]:', err);
     }

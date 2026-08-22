@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Transaction Parser — Email & SMS Ingestion Deep Dive</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090d16;
+      --surface: #0f172a;
+      --surface-elevated: #1e293b;
+      --surface-border: #334155;
+      --border-subtle: #1e293d;
+      
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      
+      --blue: #38bdf8;
+      --blue-glow: rgba(56, 189, 248, 0.15);
+      --purple: #c084fc;
+      --green: #34d399;
+      --amber: #fbbf24;
+      --rose: #f87171;
+      --cyan: #22d3ee;
+      
+      --code-bg: #030712;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 0;
+    }
+
+    /* Layout */
+    .app-layout {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* Sidebar Navigation */
+    aside.sidebar {
+      width: 300px;
+      background: var(--surface);
+      border-right: 1px solid var(--surface-border);
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      padding: 2rem 1.5rem;
+      flex-shrink: 0;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 2rem;
+      padding-bottom: 1.25rem;
+      border-bottom: 1px solid var(--surface-border);
+    }
+
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #38bdf8, #818cf8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #030712;
+      font-weight: 800;
+      font-size: 1.1rem;
+    }
+
+    .brand-text h2 {
+      font-size: 1rem;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+
+    .brand-text span {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    nav.toc-nav {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .nav-header {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 800;
+      color: var(--text-dim);
+      margin: 1.2rem 0 0.4rem 0.5rem;
+    }
+
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.55rem 0.75rem;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.84rem;
+      font-weight: 600;
+      border-radius: 8px;
+      transition: all 0.15s ease;
+    }
+
+    .nav-link:hover {
+      color: var(--text);
+      background: var(--surface-elevated);
+    }
+
+    .nav-link.active {
+      color: var(--blue);
+      background: rgba(56, 189, 248, 0.1);
+      border-left: 3px solid var(--blue);
+    }
+
+    /* Main Content */
+    main.content {
+      flex: 1;
+      max-width: 1200px;
+      padding: 3rem 4rem;
+      overflow-x: hidden;
+    }
+
+    /* Typography & Section Styling */
+    h1.doc-title {
+      font-size: 2.25rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, #f8fafc 0%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.5rem;
+    }
+
+    p.doc-subtitle {
+      font-size: 1.05rem;
+      color: var(--text-muted);
+      margin-bottom: 2.5rem;
+      line-height: 1.6;
+    }
+
+    section.doc-section {
+      margin-bottom: 4rem;
+      padding-top: 1rem;
+    }
+
+    h2.section-heading {
+      font-size: 1.5rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--surface-border);
+    }
+
+    h3.sub-heading {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #e2e8f0;
+      margin: 1.75rem 0 0.85rem 0;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    p {
+      color: #cbd5e1;
+      font-size: 0.95rem;
+      margin-bottom: 1.25rem;
+    }
+
+    /* Callout Card */
+    .callout {
+      background: rgba(30, 41, 59, 0.7);
+      border: 1px solid var(--surface-border);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      margin: 1.5rem 0;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .callout::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+    }
+
+    .callout.info::before { background: var(--blue); }
+    .callout.warning::before { background: var(--amber); }
+    .callout.success::before { background: var(--green); }
+    .callout.danger::before { background: var(--rose); }
+
+    .callout-title {
+      font-size: 0.9rem;
+      font-weight: 800;
+      margin-bottom: 0.35rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .callout.info .callout-title { color: var(--blue); }
+    .callout.warning .callout-title { color: var(--amber); }
+    .callout.success .callout-title { color: var(--green); }
+    .callout.danger .callout-title { color: var(--rose); }
+
+    /* Code Blocks */
+    .code-block {
+      background: var(--code-bg);
+      border: 1px solid var(--surface-border);
+      border-radius: 12px;
+      margin: 1.25rem 0;
+      overflow: hidden;
+    }
+
+    .code-header {
+      background: #0b1120;
+      padding: 0.6rem 1rem;
+      border-bottom: 1px solid var(--surface-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+    }
+
+    .code-header span.file-badge {
+      color: #93c5fd;
+      font-weight: 600;
+    }
+
+    pre.code-content {
+      padding: 1.25rem 1.5rem;
+      overflow-x: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.84rem;
+      line-height: 1.6;
+      color: #e2e8f0;
+    }
+
+    /* Keyword highlight styling */
+    .kw { color: #f472b6; font-weight: 600; }
+    .fn { color: #60a5fa; font-weight: 600; }
+    .str { color: #34d399; }
+    .re { color: #fbbf24; }
+    .num { color: #c084fc; }
+    .cmt { color: #64748b; font-style: italic; }
+
+    /* Tables */
+    .table-container {
+      width: 100%;
+      overflow-x: auto;
+      margin: 1.5rem 0;
+      border: 1px solid var(--surface-border);
+      border-radius: 12px;
+    }
+
+    table.doc-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      text-align: left;
+      background: var(--surface);
+    }
+
+    table.doc-table th {
+      background: #0f172a;
+      padding: 0.85rem 1.2rem;
+      color: #94a3b8;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      border-bottom: 1px solid var(--surface-border);
+      font-weight: 700;
+    }
+
+    table.doc-table td {
+      padding: 0.85rem 1.2rem;
+      border-bottom: 1px solid var(--border-subtle);
+      color: #cbd5e1;
+    }
+
+    table.doc-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    table.doc-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .badge {
+      display: inline-block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 0.2rem 0.55rem;
+      border-radius: 6px;
+      letter-spacing: 0.02em;
+    }
+
+    .badge.blue { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); }
+    .badge.green { background: rgba(52, 211, 153, 0.15); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.3); }
+    .badge.amber { background: rgba(251, 191, 36, 0.15); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.3); }
+    .badge.rose { background: rgba(248, 113, 113, 0.15); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.3); }
+    .badge.purple { background: rgba(192, 132, 252, 0.15); color: #c084fc; border: 1px solid rgba(192, 132, 252, 0.3); }
+
+    /* Interactive Live Simulator */
+    .simulator-card {
+      background: var(--surface);
+      border: 1px solid var(--blue);
+      border-radius: 16px;
+      padding: 2rem;
+      margin: 2rem 0;
+      box-shadow: 0 0 30px var(--blue-glow);
+    }
+
+    .sim-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--surface-border);
+    }
+
+    .sim-input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .sim-label {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .sim-input, .sim-textarea {
+      width: 100%;
+      background: #030712;
+      border: 1px solid var(--surface-border);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+    }
+
+    .sim-textarea {
+      min-height: 110px;
+      resize: vertical;
+    }
+
+    .sim-input:focus, .sim-textarea:focus {
+      outline: none;
+      border-color: var(--blue);
+      box-shadow: 0 0 10px var(--blue-glow);
+    }
+
+    .sim-btn {
+      background: var(--blue);
+      color: #030712;
+      font-weight: 800;
+      font-size: 0.9rem;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .sim-btn:hover {
+      background: #7dd3fc;
+      transform: translateY(-1px);
+    }
+
+    .sim-result {
+      margin-top: 1.5rem;
+      background: #030712;
+      border: 1px solid var(--surface-border);
+      border-radius: 10px;
+      padding: 1.25rem;
+      display: none;
+    }
+
+    .sim-result.active {
+      display: block;
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .app-layout { flex-direction: column; }
+      aside.sidebar { width: 100%; height: auto; position: static; }
+      main.content { padding: 1.5rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-layout">
+    
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">⚡</div>
+        <div class="brand-text">
+          <h2>Txn Parser</h2>
+          <span>Technical Spec & Reference</span>
+        </div>
+      </div>
+
+      <nav class="toc-nav">
+        <div class="nav-header">Architecture</div>
+        <a href="#gmail-ingest" class="nav-link">1. Gmail Ingestion & Headers</a>
+        <a href="#mime-traversal" class="nav-link">2. MIME Tree & HTML Stripping</a>
+        <a href="#sms-ingest" class="nav-link">3. SMS Webhook Normalization</a>
+
+        <div class="nav-header">Classification Engine</div>
+        <a href="#non-transactional" class="nav-link">4. Non-Transactional Filter</a>
+        <a href="#completion-verbs" class="nav-link">5. Completion Verb Override</a>
+        <a href="#bank-parsers" class="nav-link">6. Bank Regex Engine Matrix</a>
+
+        <div class="nav-header">Safety & Deduplication</div>
+        <a href="#llm-fallback" class="nav-link">7. LLM Fallback & Safety Net</a>
+        <a href="#reconciliation" class="nav-link">8. Multi-Source Dedup</a>
+
+        <div class="nav-header">Interactive Tools</div>
+        <a href="#live-simulator" class="nav-link active">9. Live Parser Simulator</a>
+      </nav>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="content">
+
+      <h1 class="doc-title">Email & SMS Ingestion Architecture</h1>
+      <p class="doc-subtitle">A comprehensive breakdown of headers, MIME payload extraction, HTML sanitization, non-transactional pre-filtering, and regex classification in <code>gmail-txn-parser</code>.</p>
+
+      <!-- SECTION 1: GMAIL INGESTION & HEADERS -->
+      <section id="gmail-ingest" class="doc-section">
+        <h2 class="section-heading">
+          <span class="badge blue">01</span>
+          Gmail Ingestion, Headers & Sender Allowlist
+        </h2>
+
+        <p>Email ingestion runs in <code>fetchAndParse.js</code> via the official Google Gmail REST API (v1). Rather than querying all mail, it starts with an <strong>allowlist query</strong> to completely ignore non-banking traffic (promos, newsletter subscriptions, social notifications) before fetching payloads.</p>
+
+        <div class="code-block">
+          <div class="code-header">
+            <span class="file-badge">fetchAndParse.js — Allowlist Query</span>
+            <span>JavaScript</span>
+          </div>
+          <pre class="code-content"><span class="kw">const</span> <span class="num">BANK_SENDERS</span> = [
+  <span class="str">'transactionalert@indusind.com'</span>,
+  <span class="str">'onlinesbicard@sbicard.com'</span>,
+  <span class="str">'alert@icici.bank.in'</span>,
+  <span class="str">'customernotification@icici.bank.in'</span>,
+  <span class="str">'alerts@hdfcbank.bank.in'</span>,
+  <span class="str">'alerts@axis.bank.in'</span>,
+];
+
+<span class="kw">const</span> senderQuery = <span class="num">BANK_SENDERS</span>.<span class="fn">map</span>(s =&gt; <span class="str">`from:${s}`</span>).<span class="fn">join</span>(<span class="str">' OR '</span>);
+<span class="kw">const</span> { data: list } = <span class="kw">await</span> gmail.users.messages.<span class="fn">list</span>({
+  userId: <span class="str">'me'</span>,
+  q: <span class="str">`(${senderQuery}) newer_than:30d`</span>,
+  maxResults: <span class="num">50</span>,
+});</pre>
+        </div>
+
+        <h3 class="sub-heading">Extracted Email Headers</h3>
+        <p>For each message returned by the query, <code>gmail.users.messages.get({ format: 'full' })</code> is called. The parser extracts the following specific headers:</p>
+
+        <div class="table-container">
+          <table class="doc-table">
+            <thead>
+              <tr>
+                <th>Header Name</th>
+                <th>Raw Example</th>
+                <th>Transformation / Parser Use</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>From</code></td>
+                <td><code>"Axis Bank Alerts" &lt;alerts@axis.bank.in&gt;</code></td>
+                <td>Sanitized via <code>extractEmail()</code> to extract the raw address <code>alerts@axis.bank.in</code> for bank sender matching.</td>
+              </tr>
+              <tr>
+                <td><code>Subject</code></td>
+                <td><code>INR 167 spent on credit card no. XX9992</code></td>
+                <td>Prepended to the extracted body text (<code>`${subject}\n${bodyText}`</code>) so transaction keywords (like "spent") are available to regex and filters.</td>
+              </tr>
+              <tr>
+                <td><code>Date</code></td>
+                <td><code>Fri, 21 Aug 2026 22:23:11 +0530</code></td>
+                <td>Fallback timestamp if internalDate is missing.</td>
+              </tr>
+              <tr>
+                <td><code>msg.internalDate</code></td>
+                <td><code>1787333591000</code> (Epoch ms)</td>
+                <td>Converted to standard ISO-8601 UTC timestamp: <code>new Date(Number(internalDate)).toISOString()</code>.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- SECTION 2: MIME TREE TRAVERSAL -->
+      <section id="mime-traversal" class="doc-section">
+        <h2 class="section-heading">
+          <span class="badge purple">02</span>
+          MIME Tree Traversal & HTML Stripping
+        </h2>
+
+        <p>Gmail API returns emails as nested MIME trees (e.g. <code>multipart/mixed</code> wrapping <code>multipart/alternative</code> containing <code>text/plain</code> and <code>text/html</code>). The function <code>extractBodies()</code> walks this recursive tree and decodes <code>base64url</code> payloads:</p>
+
+        <div class="code-block">
+          <div class="code-header">
+            <span class="file-badge">fetchAndParse.js — MIME Tree Walker</span>
+            <span>JavaScript</span>
+          </div>
+          <pre class="code-content"><span class="kw">function</span> <span class="fn">decodeBase64Url</span>(data) {
+  <span class="kw">return</span> <span class="fn">Buffer</span>.<span class="fn">from</span>(data, <span class="str">'base64'</span>).<span class="fn">toString</span>(<span class="str">'utf-8'</span>);
+}
+
+<span class="kw">function</span> <span class="fn">extractBodies</span>(payload) {
+  <span class="kw">let</span> htmlBody = <span class="str">''</span>;
+  <span class="kw">let</span> plaintextBody = <span class="str">''</span>;
+  (<span class="kw">function</span> <span class="fn">walk</span>(part) {
+    <span class="kw">if</span> (!part) <span class="kw">return</span>;
+    <span class="kw">if</span> (part.mimeType === <span class="str">'text/html'</span> &amp;&amp; part.body &amp;&amp; part.body.data) {
+      htmlBody += <span class="fn">decodeBase64Url</span>(part.body.data);
+    } <span class="kw">else if</span> (part.mimeType === <span class="str">'text/plain'</span> &amp;&amp; part.body &amp;&amp; part.body.data) {
+      plaintextBody += <span class="fn">decodeBase64Url</span>(part.body.data);
+    }
+    (part.parts || []).<span class="fn">forEach</span>(walk);
+  })(payload);
+  <span class="kw">return</span> { htmlBody, plaintextBody };
+}</pre>
+        </div>
+
+        <h3 class="sub-heading">HTML Stripping & Whitespace Normalization</h3>
+        <p>When an email only has an HTML part (standard for HDFC and IndusInd), <code>stripHtml(html)</code> converts rich styling and layout tables into clean, regex-parseable text:</p>
+
+        <div class="code-block">
+          <div class="code-header">
+            <span class="file-badge">bankParsers.js — stripHtml Engine</span>
+            <span>JavaScript</span>
+          </div>
+          <pre class="code-content"><span class="kw">function</span> <span class="fn">stripHtml</span>(html) {
+  <span class="kw">return</span> html
+    .<span class="fn">replace</span>(<span class="re">/&lt;style[^&gt;]*&gt;[\s\S]*?&lt;\/style&gt;/gi</span>, <span class="str">''</span>)   <span class="cmt">// Remove CSS stylesheets</span>
+    .<span class="fn">replace</span>(<span class="re">/&lt;script[^&gt;]*&gt;[\s\S]*?&lt;\/script&gt;/gi</span>, <span class="str">''</span>) <span class="cmt">// Remove JavaScript</span>
+    .<span class="fn">replace</span>(<span class="re">/&lt;[^&gt;]+&gt;/g</span>, <span class="str">' '</span>)                         <span class="cmt">// Strip all HTML tags to space</span>
+    .<span class="fn">replace</span>(<span class="re">/&amp;nbsp;/gi</span>, <span class="str">' '</span>)                         <span class="cmt">// Normalize non-breaking spaces</span>
+    .<span class="fn">replace</span>(<span class="re">/&amp;amp;/gi</span>, <span class="str">'&amp;'</span>)                          <span class="cmt">// Unescape XML entities</span>
+    .<span class="fn">replace</span>(<span class="re">/\s+/g</span>, <span class="str">' '</span>)                            <span class="cmt">// Collapse runs of whitespace</span>
+    .<span class="fn">trim</span>();
+}</pre>
+        </div>
+      </section>
+
+      <!-- SECTION 3: SMS WEBHOOK INGESTION -->
+      <section id="sms-ingest" class="doc-section">
+        <h2 class="section-heading">
+          <span class="badge green">03</span>
+          SMS Webhook Ingestion & Normalization
+        </h2>
+
+        <p>SMS transaction alerts from banks are pushed via an <strong>iOS Shortcuts automation</strong> running on the user's phone directly to <code>POST /api/sms-ingest</code> on the server.</p>
+
+        <div class="table-container">
+          <table class="doc-table">
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Source from iOS Shortcut</th>
+                <th>Server Normalization in <code>server.js</code></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Sender</strong></td>
+                <td><code>body.sender</code> (e.g. <code>HDFCBK-S</code>, <code>ICICIB-T</code>)</td>
+                <td>Matched against SMS regex allowlists (ICICI, HDFC, SBI, Axis, OneCard, Axio).</td>
+              </tr>
+              <tr>
+                <td><strong>Date / Time</strong></td>
+                <td><code>body.date</code> (e.g. <code>21/08/2026, 22:23</code>)</td>
+                <td>Processed via <code>safeIsoDate()</code> to support Indian <code>DD/MM/YYYY</code> and 12-hour AM/PM formats into strict ISO-8601 UTC.</td>
+              </tr>
+              <tr>
+                <td><strong>Message ID</strong></td>
+                <td>Calculated Deterministically</td>
+                <td><code>crypto.createHash('sha1').update(`${sender}|${text}|${isoDate}`).digest('hex')</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- SECTION 4: NON-TRANSACTIONAL PRE-FILTER -->
+      <section id="non-transactional" class="doc-section">
+        <h2 class="section-heading">
+          <span class="badge amber">04</span>
+          How <code>nonTransactional.js</code> Works
+        </h2>
+
+        <p>Banks send many messages from their primary notification sender that are <strong>not actual transactions</strong> (e.g. OTPs, login notices, statement generation alerts, credit limit upgrades). <code>nonTransactional.js</code> acts as a high-speed pre-filter to drop this noise before expensive regex or LLM calls.</p>
+
+        <div class="code-block">
+          <div class="code-header">
+            <span class="file-badge">nonTransactional.js — Complete Logic</span>
+            <span>JavaScript</span>
+          </div>
+          <pre class="code-content"><span class="kw">const</span> <span class="num">NON_TRANSACTIONAL_RE</span> =
+  <span class="re">/\b(OTP|one[- ]time password|logged in|login (has been |was )?enabled|password|verification code|pending payment request|payment request|requested you to pay|tap to pay|is pending|failed|declined|attempt.*could not be completed|cashback|is due on|due date|scheduled for auto-debit|offer|loan|avail|credit limit|limit increase|apply now|upcoming|activat(ed|ion))\b|\bbill\b.{0,60}?\b(is ready|is generated|generated)\b|\bstatement\b.{0,60}?\b(generated|is ready)\b/i</span>;
+
+<span class="kw">const</span> <span class="num">COMPLETION_VERB_RE</span> =
+  <span class="re">/\b(debited|credited|spent|paid|withdrawn|purchase[d]?|sent|received|transferred|disbursed|transaction\s+amount)\b/i</span>;
+
+<span class="kw">const</span> <span class="num">FUTURE_RE</span> = <span class="re">/\b(will be debited|is due|due on|due date|scheduled for|will be credited)\b/i</span>;
+<span class="kw">const</span> <span class="num">FAILED_RE</span> = <span class="re">/\b(failed|declined|rejected|cancelled|cancel|not debited|no amount (was|has been) debited)\b/i</span>;
+<span class="kw">const</span> <span class="num">BILL_PAYMENT_RE</span> = <span class="re">/\b(received payment|payment.*received|bill payment.*received)\b/i</span>;
+
+<span class="kw">function</span> <span class="fn">isNonTransactional</span>(text) {
+  <span class="kw">if</span> (!text) <span class="kw">return</span> <span class="kw">false</span>;
+  <span class="kw">if</span> (<span class="num">FUTURE_RE</span>.<span class="fn">test</span>(text) || <span class="num">FAILED_RE</span>.<span class="fn">test</span>(text) || <span class="num">BILL_PAYMENT_RE</span>.<span class="fn">test</span>(text)) <span class="kw">return</span> <span class="kw">true</span>;
+  <span class="kw">return</span> <span class="num">NON_TRANSACTIONAL_RE</span>.<span class="fn">test</span>(text) &amp;&amp; !<span class="num">COMPLETION_VERB_RE</span>.<span class="fn">test</span>(text);
+}</pre>
+        </div>
+
+        <h3 class="sub-heading">Pre-Filter Decision Truth Table</h3>
+        <div class="table-container">
+          <table class="doc-table">
+            <thead>
+              <tr>
+                <th>Condition</th>
+                <th>Example Message</th>
+                <th><code>isNonTransactional</code></th>
+                <th>Outcome</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>FUTURE_RE.test() === true</code></td>
+                <td><em>"Rs. 499 will be debited on 25/08 for Netflix"</em></td>
+                <td><span class="badge rose">TRUE</span></td>
+                <td>Dropped (Future obligation, no money moved yet)</td>
+              </tr>
+              <tr>
+                <td><code>FAILED_RE.test() === true</code></td>
+                <td><em>"Transaction for Rs. 399 at Epic Games is Declined"</em></td>
+                <td><span class="badge rose">TRUE</span></td>
+                <td>Dropped / Excluded from unsplit ledger</td>
+              </tr>
+              <tr>
+                <td><code>NON_TRANSACTIONAL_RE === true</code> &amp;&amp; <code>COMPLETION_VERB_RE === false</code></td>
+                <td><em>"OTP for ICICI Bank login is 123456. Do not share."</em></td>
+                <td><span class="badge rose">TRUE</span></td>
+                <td>Dropped (Administrative / Security OTP)</td>
+              </tr>
+              <tr>
+                <td><code>NON_TRANSACTIONAL_RE === true</code> &amp;&amp; <code>COMPLETION_VERB_RE === true</code></td>
+                <td><em>"INR 167 spent on card XX9992 ... Security Note: Do not share OTP"</em></td>
+                <td><span class="badge green">FALSE</span></td>
+                <td><strong>PASSED TO PARSER</strong> (Completion verb overrides footer noise)</td>
+              </tr>
+              <tr>
+                <td>Standard Spend Message</td>
+                <td><em>"Spent Rs.316 On HDFC Bank Card 6558 At SWIGGY FOOD"</em></td>
+                <td><span class="badge green">FALSE</span></td>
+                <td><strong>PASSED TO PARSER</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- SECTION 5: COMPLETION VERB OVERRIDE -->
+      <section id="completion-verbs" class="doc-section">
+        <h2 class="section-heading">
+          <span class="badge rose">05</span>
+          The Security Footer vs. Completion Verb Override
+        </h2>
+
+        <div class="callout warning">
+          <div class="callout-title">Case Study: The Axis Bank ₹167 Transaction</div>
+          <p>Axis Bank credit card emails have security warnings in their HTML footer: <em>"Please do not share your Internet Banking details, password or OTP with anyone... Total Credit Limit: INR 44000"</em>.</p>
+          <p>Because the body contained the keywords <code>OTP</code> and <code>Credit Limit</code>, <code>NON_TRANSACTIONAL_RE</code> matched. In the body, Axis formatted the charge as <code>Transaction Amount: INR 167</code> while the word <code>spent</code> was in the Subject line (<code>INR 167 spent on credit card no. XX9992</code>).</p>
+          <p>By extracting the Subject and adding <code>transaction\s+amount</code> to <code>COMPLETION_VERB_RE</code>, the completion gate activates and overrides the footer noise.</p>
+        </div>
+      </section>
+
+      <!-- SECTION 6: BANK REGEX MATRIX -->
+      <section id="bank-parsers" class="doc-section">
+        <h2 class="section-heading">
+          <span class="badge blue">06</span>
+          Bank Regex Engine Matrix
+        </h2>
+
+        <p>Once past the pre-filter, the message is evaluated by bank-specific deterministic regex parsers:</p>
+
+        <div class="table-container">
+          <table class="doc-table">
+            <thead>
+              <tr>
+                <th>Bank &amp; Channel</th>
+                <th>Pattern Shape / Regex</th>
+                <th>Captured Fields</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="badge blue">HDFC Bank</span><br>Credit Card SMS</td>
+                <td><code>/Spent (?:Rs\.?|INR) ([\d,]+\.?\d*) On HDFC Bank Card (\w+) At (.+?) On ([\d-]+(?::[\d:]+)?)/i</code></td>
+                <td><code>amount</code>, <code>last4</code>, <code>merchant</code>, <code>rawDate</code>, <code>type: 'debit'</code></td>
+              </tr>
+              <tr>
+                <td><span class="badge blue">HDFC Bank</span><br>UPI Send SMS</td>
+                <td><code>/Sent (?:Rs\.?|INR) ([\d,]+\.?\d*) From HDFC Bank A\/C \*?(\w+) To (.+?) On ([\d/]+) Ref (\d+)/i</code></td>
+                <td><code>amount</code>, <code>last4</code>, <code>merchant</code>, <code>rawDate</code>, <code>refNo</code></td>
+              </tr>
+              <tr>
+                <td><span class="badge green">ICICI Bank</span><br>UPI Debit SMS</td>
+                <td><code>/ICICI Bank Acct (\w+) debited (?:for|by)? (?:Rs\.?|INR) ([\d,]+\.?\d*) on ([\d-]{8,11}); (.+?) credited\. UPI:? (\d+)/i</code></td>
+                <td><code>account</code>, <code>amount</code>, <code>rawDate</code>, <code>merchant</code>, <code>refNo</code></td>
+              </tr>
+              <tr>
+                <td><span class="badge amber">SBI Card</span><br>UPI / Card Email</td>
+                <td><code>/Rs\.?\s?([\d,]+\.\d{2}) spent on your SBI Credit Card ending with (\d+) at (.+?) on ([\d-]{8}) via (\w+)/i</code></td>
+                <td><code>amount</code>, <code>last4</code>, <code>merchant</code>, <code>rawDate</code>, <code>paymentMode</code></td>
+              </tr>
+              <tr>
+                <td><span class="badge purple">Axis Bank</span><br>Credit Card Email</td>
+                <td><code>/Transaction Amount:\s*INR\s*([\d,]+\.?\d*)\s*Merchant Name:\s*(.+?)\s*Axis Bank Credit Card No\.\s*(\w+)/i</code></td>
+                <td><code>amount</code>, <code>merchant</code>, <code>last4</code>, <code>rawDate</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- SECTION 7: LLM FALLBACK & SAFETY NET -->
+      <section id="llm-fallback" class="doc-section">
+        <h2 class="section-heading">
+          <span class="badge purple">07</span>
+          LLM Fallback &amp; <code>needsReview</code> Safety Net
+        </h2>
+
+        <p>If an email or SMS arrives from an allowlisted bank but the template does not match any regex (e.g. bank updated their phrasing), the pipeline falls back to OpenRouter (<code>meta-llama/llama-3.3-70b-instruct</code>) with a strict financial prompt:</p>
+
+        <div class="code-block">
+          <div class="code-header">
+            <span class="file-badge">llmFallback.js — System Prompt</span>
+            <span>Text</span>
+          </div>
+          <pre class="code-content">You are a strict transaction classifier and extractor.
+First determine whether this message represents an actual financial transaction.
+The presence of a monetary amount is NOT evidence of a transaction.
+Loan offers, credit offers, advertisements, cashback, bill reminders, future scheduled payments, OTPs must be classified as NON_TRANSACTION.
+If there is insufficient evidence, output ONLY: {"notATransaction": true}
+If valid: output ONLY JSON: { "bank", "instrument", "last4", "amount", "currency", "merchant", "type", "status", "rawDate", "refNo" }</pre>
+        </div>
+
+        <div class="callout success">
+          <div class="callout-title">The Single-Store Rule</div>
+          <p>In both <code>server.js</code> (SMS) and <code>fetchAndParse.js</code> (Email), the LLM is called <strong>before</strong> writing to the database. If the LLM succeeds, the resolved transaction is inserted directly into the matching engine. A <code>needsReview: true</code> placeholder is created <strong>only if the LLM API throws or is offline</strong>.</p>
+        </div>
+      </section>
+
+      <!-- SECTION 8: RECONCILIATION -->
+      <section id="reconciliation" class="doc-section">
+        <h2 class="section-heading">
+          <span class="badge cyan">08</span>
+          Multi-Source Deduplication (Matching Engine)
+        </h2>
+
+        <p>When an SMS and an Email arrive for the same payment, <code>matchingEngine.js</code> reconciles them into 1 canonical transaction using a 4-level matching hierarchy:</p>
+
+        <div class="table-container">
+          <table class="doc-table">
+            <thead>
+              <tr>
+                <th>Level</th>
+                <th>Strategy</th>
+                <th>Confidence</th>
+                <th>Conditions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Level 1</strong></td>
+                <td>Exact Reference Match</td>
+                <td><span class="badge green">1.00</span></td>
+                <td>Identical <code>refNo</code> on both SMS and Email.</td>
+              </tr>
+              <tr>
+                <td><strong>Level 1.5</strong></td>
+                <td>Partial Ref Match</td>
+                <td><span class="badge green">0.92</span></td>
+                <td>Matching bank, amount, last4 within a 10-minute window.</td>
+              </tr>
+              <tr>
+                <td><strong>Level 2</strong></td>
+                <td>Deterministic Tight Window</td>
+                <td><span class="badge green">0.95</span></td>
+                <td>Same bank, amount, debit/credit type, exact merchant name, &le; 10 min window.</td>
+              </tr>
+              <tr>
+                <td><strong>Level 3</strong></td>
+                <td>Weighted Similarity Scoring</td>
+                <td><span class="badge amber">0.85 – 0.94</span></td>
+                <td>Merchant Similarity (50%) + Last4 Match (25%) + Time Proximity (25%).</td>
+              </tr>
+              <tr>
+                <td><strong>Level 4</strong></td>
+                <td>AI Arbitration</td>
+                <td><span class="badge purple">Dynamic</span></td>
+                <td>Fires only for ambiguous score band (0.55 – 0.85). Prefer <code>false</code> when unsure.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- SECTION 9: INTERACTIVE LIVE SIMULATOR -->
+      <section id="live-simulator" class="doc-section">
+        <h2 class="section-heading">
+          <span class="badge green">09</span>
+          Interactive Live Message Simulator
+        </h2>
+
+        <div class="simulator-card">
+          <div class="sim-header">
+            <h3>Test Any Raw SMS / Email Message</h3>
+            <span class="badge blue">Client-Side Engine</span>
+          </div>
+
+          <div class="sim-input-group">
+            <label class="sim-label">Sender Address / Header</label>
+            <input type="text" id="simSender" class="sim-input" value="alerts@axis.bank.in" placeholder="e.g. alerts@axis.bank.in or HDFCBK-S">
+          </div>
+
+          <div class="sim-input-group">
+            <label class="sim-label">Subject Line (For Emails)</label>
+            <input type="text" id="simSubject" class="sim-input" value="INR 167 spent on credit card no. XX9992" placeholder="e.g. INR 167 spent on credit card no. XX9992">
+          </div>
+
+          <div class="sim-input-group">
+            <label class="sim-label">Body Text / HTML</label>
+            <textarea id="simBody" class="sim-textarea" placeholder="Paste raw message body...">21-08-2026 Dear Akshansh Shrivastava, 
+Here's the summary of your Axis Bank Credit Card Transaction: 
+Transaction Amount: INR 167
+Merchant Name: JJ ENTERPRI 
+Axis Bank Credit Card No. XX9992
+Date & Time: 21-08-2026, 22:23:08 IST 
+Available Limit*: INR 27534.15
+Total Credit Limit*: INR 44000
+Please do not share your Internet Banking details, password or OTP with anyone.</textarea>
+          </div>
+
+          <button class="sim-btn" onclick="runSimulation()">Evaluate Message</button>
+
+          <div id="simResult" class="sim-result">
+            <!-- Results injected via JavaScript -->
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script>
+    // Embedded Client-Side Engine for Simulator
+    const NON_TRANSACTIONAL_RE = /\b(OTP|one[- ]time password|logged in|login (has been |was )?enabled|password|verification code|pending payment request|payment request|requested you to pay|tap to pay|is pending|failed|declined|attempt.*could not be completed|cashback|is due on|due date|scheduled for auto-debit|offer|loan|avail|credit limit|limit increase|apply now|upcoming|activat(ed|ion))\b|\bbill\b.{0,60}?\b(is ready|is generated|generated)\b|\bstatement\b.{0,60}?\b(generated|is ready)\b/i;
+    const COMPLETION_VERB_RE = /\b(debited|credited|spent|paid|withdrawn|purchase[d]?|sent|received|transferred|disbursed|transaction\s+amount)\b/i;
+    const FUTURE_RE = /\b(will be debited|is due|due on|due date|scheduled for|will be credited)\b/i;
+    const FAILED_RE = /\b(failed|declined|rejected|cancelled|cancel|not debited|no amount (was|has been) debited)\b/i;
+
+    function runSimulation() {
+      const sender = document.getElementById('simSender').value.trim();
+      const subject = document.getElementById('simSubject').value.trim();
+      const body = document.getElementById('simBody').value.trim();
+
+      const combinedText = subject ? `${subject}\n${body}` : body;
+
+      // 1. Check Non-Transactional Filter
+      const isFuture = FUTURE_RE.test(combinedText);
+      const isFailed = FAILED_RE.test(combinedText);
+      const hasNoise = NON_TRANSACTIONAL_RE.test(combinedText);
+      const hasCompletion = COMPLETION_VERB_RE.test(combinedText);
+
+      let filterResult = false;
+      let filterReason = "Passed pre-filter";
+
+      if (isFuture) {
+        filterResult = true;
+        filterReason = "Matched FUTURE_RE (Scheduled / Due date alert)";
+      } else if (isFailed) {
+        filterResult = true;
+        filterReason = "Matched FAILED_RE (Declined / Failed payment)";
+      } else if (hasNoise && !hasCompletion) {
+        filterResult = true;
+        filterReason = "Matched NON_TRANSACTIONAL_RE without any COMPLETION_VERB override";
+      } else if (hasNoise && hasCompletion) {
+        filterResult = false;
+        filterReason = "Contains noise keywords, but OVERRIDDEN by Completion Verb in subject/body!";
+      }
+
+      // 2. Test Regex Parsers (Axis Example)
+      let parsed = null;
+      if (!filterResult) {
+        const axisRe = /Transaction Amount:\s*INR\s*([\d,]+\.?\d*)\s*Merchant Name:\s*(.+?)\s*Axis Bank Credit Card No\.\s*(\w+)/i;
+        const m = combinedText.match(axisRe);
+        if (m) {
+          parsed = {
+            bank: "Axis Bank",
+            instrument: "Credit Card",
+            last4: m[3],
+            amount: parseFloat(m[1].replace(/,/g, '')),
+            currency: "INR",
+            merchant: m[2].trim(),
+            status: "Approved",
+            type: "debit"
+          };
+        }
+      }
+
+      const resBox = document.getElementById('simResult');
+      resBox.className = 'sim-result active';
+      resBox.innerHTML = `
+        <h4 style="font-size: 1rem; color: #fff; margin-bottom: 0.75rem;">Simulation Result</h4>
+        <div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.85rem;">
+          <div><strong style="color: #94a3b8;">Pre-Filter Evaluation:</strong> <span class="badge ${filterResult ? 'rose' : 'green'}">${filterResult ? 'DROPPED (NON-TRANSACTION)' : 'PASSED'}</span></div>
+          <div><strong style="color: #94a3b8;">Filter Reason:</strong> <span style="color: #e2e8f0;">${filterReason}</span></div>
+          <div><strong style="color: #94a3b8;">Signals Detected:</strong> 
+            ${hasCompletion ? '<span class="badge green">Completion Verb</span> ' : ''}
+            ${hasNoise ? '<span class="badge amber">Noise Keyword</span> ' : ''}
+            ${isFuture ? '<span class="badge rose">Future Regex</span> ' : ''}
+            ${isFailed ? '<span class="badge rose">Failed Regex</span> ' : ''}
+          </div>
+          <div style="margin-top: 0.5rem;"><strong style="color: #94a3b8;">Parsed Output:</strong></div>
+          <pre style="background: #000; padding: 0.75rem; border-radius: 6px; font-family: monospace; font-size: 0.8rem; color: #38bdf8;">${parsed ? JSON.stringify(parsed, null, 2) : (filterResult ? 'null (dropped by pre-filter)' : 'Fallback to LLM Extraction')}</pre>
+        </div>
+      `;
+    }
+  </script>
+</body>
+</html>
