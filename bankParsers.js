@@ -201,8 +201,9 @@ const BANK_PARSERS = [
   },
 ];
 
-function parseTransactionEmail({ sender, htmlBody, plaintextBody }) {
-  const text = plaintextBody || (htmlBody ? stripHtml(htmlBody) : '');
+function parseTransactionEmail({ sender, subject, htmlBody, plaintextBody }) {
+  const bodyText = plaintextBody || (htmlBody ? stripHtml(htmlBody) : '');
+  const text = subject ? `${subject}\n${bodyText}` : bodyText;
   if (!text) return null;
 
   for (const parser of BANK_PARSERS) {

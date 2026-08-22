@@ -59,6 +59,13 @@ const fixtures = [
       "04-08-2026 Dear Jordan Lee, \r\n\r\n Here's the summary of your Axis Bank Credit Card Transaction: \r\n Transaction Amount: \r\n INR 113.4\r\n Merchant Name: \r\n Burger King \r\n Axis Bank Credit Card No. \r\n XX4567\r\n Date & Time: \r\n 04-08-2026, 19:44:03 IST \r\n Available Limit*: \r\n INR 34439.6\r\n If this transaction was not intiated by you, SMS BLOCK 4567 to +919999999999.",
   },
   {
+    label: 'Axis Bank — credit card purchase with subject',
+    sender: 'alerts@axis.bank.in',
+    subject: 'INR 167 spent on credit card no. XX9992',
+    plaintextBody:
+      "21-08-2026 Dear Akshansh Shrivastava, \n Here's the summary of your Axis Bank Credit Card Transaction: \n Transaction Amount: \n INR 167\n Merchant Name: \n JJ ENTERPRI \n Axis Bank Credit Card No. \n XX9992\n Date & Time: \n 21-08-2026, 22:23:08 IST \n Available Limit*: \n INR 27534.15\n Total Credit Limit*: \n INR 44000\n *The information above includes the available and total credit limit across all of your Axis Bank credit cards. \n Please do not share your Internet Banking details, such as user ID/password or your Credit/Debit Card number/CVV/OTP with anyone.",
+  },
+  {
     label: 'Swiggy payment-failed — should be IGNORED (not a bank sender)',
     sender: 'noreply@swiggy.in',
     plaintextBody:
