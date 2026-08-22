@@ -71,6 +71,7 @@ async function main() {
     // retried above) — skip re-fetching/re-parsing it this run.
     if (db.getTransaction(ref.id)) continue;
 
+    const { data: msg } = await gmail.users.messages.get({ userId: 'me', id: ref.id, format: 'full' });
     const headers = msg.payload.headers || [];
     const fromHeader = (headers.find((h) => h.name === 'From') || {}).value || '';
     const subject = (headers.find((h) => h.name === 'Subject') || {}).value || '';
