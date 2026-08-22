@@ -314,6 +314,40 @@ async function runLayer4() {
   }
 }
 
+// ─── LAYER 5: Matching Engine & P0 Conflict Checks ─────────────────────────
+async function runLayer5() {
+  section('Layer 5 — Matching Engine & P0 Conflict Checks (matchingEngine)');
+  const { hasConflict, matchSource } = require('../src/engine/matchingEngine');
+
+  // Unit tests for hasConflict
+  if (hasConflict({ last4: '1234' }, { last4: '5678' })) pass('conflict: last4 mismatch (1234 vs 5678)');
+  else fail('conflict-last4', 'Failed to detect last4 mismatch');
+
+  if (hasConflict({ refNo: 'REF1' }, { refNo: 'REF2' })) pass('conflict: refNo mismatch (REF1 vs REF2)');
+  else fail('conflict-refNo', 'Failed to detect refNo mismatch');
+
+  if (hasConflict({ type: 'debit' }, { type: 'credit' })) pass('conflict: type mismatch (debit vs credit)');
+  else fail('conflict-type', 'Failed to detect type mismatch');
+
+  if (hasConflict({ bank: 'HDFC Bank' }, { bank: 'ICICI Bank' })) pass('conflict: bank mismatch (HDFC vs ICICI)');
+  else fail('conflict-bank', 'Failed to detect bank mismatch');
+
+  if (!hasConflict({ last4: '1234', bank: 'HDFC Bank' }, { last4: '1234', bank: 'HDFC Bank' })) pass('no conflict: identical card & bank');
+  else fail('no-conflict', 'False positive conflict detected');
+
+  // matchSource checks
+  const src = { bank: 'HDFC Bank', amount: 500, type: 'debit', merchant: 'Swiggy', last4: '1234' };
+  const conflictingCand = { bank: 'HDFC Bank', amount: 500, type: 'debit', merchant: 'Swiggy', last4: '5678' };
+  const match1 = await matchSource(src, [conflictingCand]);
+  if (!match1) pass('dedup: conflicting last4 rejected from merge');
+  else fail('dedup-conflict', 'Incorrectly merged conflicting last4');
+
+  const matchingCand = { bank: 'HDFC Bank', amount: 500, type: 'debit', merchant: 'Swiggy', last4: '1234' };
+  const match2 = await matchSource(src, [matchingCand]);
+  if (match2 && match2.method === 'deterministic') pass('dedup: deterministic exact match merged cleanly');
+  else fail('dedup-match', `Expected deterministic match, got ${JSON.stringify(match2)}`);
+}
+
 // ─── Runner ──────────────────────────────────────────────────────────────────
 async function main() {
   console.log(`\n${BOLD}Transaction Parser Regression Suite${RESET}`);
@@ -323,6 +357,7 @@ async function main() {
   await runLayer2();
   await runLayer3();
   await runLayer4();
+  await runLayer5();
 
   // ─── Summary ──────────────────────────────────────────────────────────────
   const total = totalPassed + totalFailed;
