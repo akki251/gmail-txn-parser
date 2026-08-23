@@ -40,7 +40,17 @@ function merchantSimilarity(m1, m2) {
 }
 
 function lastFourOf(record) {
-  return record.last4 || record.account || null;
+  if (!record) return null;
+  const raw = record.last4 || record.account;
+  if (!raw) return null;
+  const digits = String(raw).replace(/\D/g, '');
+  return digits ? digits.slice(-4) : String(raw).trim();
+}
+
+function normalizeRefNo(refNo) {
+  if (!refNo) return null;
+  const clean = String(refNo).replace(/^(UPI:?|REF(?:\s*NO\.?)?:?|NO\.?)\s*/i, '').trim();
+  return clean || null;
 }
 
 /**
@@ -51,12 +61,14 @@ function lastFourOf(record) {
 function hasConflict(a, b) {
   if (!a || !b) return false;
 
-  // 1. Conflicting reference numbers (both present and not equal)
-  if (a.refNo && b.refNo && a.refNo !== b.refNo) {
+  // 1. Conflicting reference numbers (both present and not equal after normalization)
+  const aRef = normalizeRefNo(a.refNo);
+  const bRef = normalizeRefNo(b.refNo);
+  if (aRef && bRef && aRef !== bRef) {
     return true;
   }
 
-  // 2. Conflicting last4 or account numbers (both present and not equal)
+  // 2. Conflicting last4 or account numbers (both present and not equal after normalization)
   const aLast4 = lastFourOf(a);
   const bLast4 = lastFourOf(b);
   if (aLast4 && bLast4 && aLast4 !== bLast4) {
