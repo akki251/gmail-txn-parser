@@ -39,7 +39,17 @@ function timeGapMs(dateA, dateB) {
 }
 
 function lastFourOf(record) {
-  return record.last4 || record.account || null;
+  if (!record) return null;
+  const raw = record.last4 || record.account;
+  if (!raw) return null;
+  const digits = String(raw).replace(/\D/g, '');
+  return digits ? digits.slice(-4) : String(raw).trim();
+}
+
+function normalizeRefNo(refNo) {
+  if (!refNo) return null;
+  const clean = String(refNo).replace(/^(UPI:?|REF(?:\s*NO\.?)?:?|NO\.?)\s*/i, '').trim();
+  return clean || null;
 }
 
 /**
@@ -52,12 +62,14 @@ function lastFourOf(record) {
 function hasConflict(a, b) {
   if (!a || !b) return false;
 
-  // 1. Conflicting reference numbers (both present and not equal)
-  if (a.refNo && b.refNo && a.refNo !== b.refNo) {
+  // 1. Conflicting reference numbers (both present and not equal after normalization)
+  const aRef = normalizeRefNo(a.refNo);
+  const bRef = normalizeRefNo(b.refNo);
+  if (aRef && bRef && aRef !== bRef) {
     return true;
   }
 
-  // 2. Conflicting last4 or account numbers (both present and not equal)
+  // 2. Conflicting last4 or account numbers (both present and not equal after normalization)
   const aLast4 = lastFourOf(a);
   const bLast4 = lastFourOf(b);
   if (aLast4 && bLast4 && aLast4 !== bLast4) {
@@ -125,10 +137,16 @@ function scoreCandidate(source, candidate, windowMs) {
 
 // aiMatchFn(source, candidate) -> Promise<{isMatch: boolean, confidence: number}>
 async function matchSource(source, candidateTransactions, aiMatchFn) {
-  // Level 1: reference number exact match.
-  if (source.refNo) {
-    const byRef = candidateTransactions.find((c) => c.refNo && c.refNo === source.refNo);
-    if (byRef) return { matchedTransaction: byRef, method: 'reference', confidence: 1.0 };
+  // Level 1: reference number exact match (normalized).
+  const srcRef = normalizeRefNo(source.refNo);
+  if (srcRef) {
+    const byRef = candidateTransactions.find((c) => {
+      const cRef = normalizeRefNo(c.refNo);
+      return cRef && cRef === srcRef;
+    });
+    if (byRef && !hasConflict(source, byRef)) {
+      return { matchedTransaction: byRef, method: 'reference', confidence: 1.0 };
+    }
   }
 
   const { reconciliationWindowMs = 45 * 60 * 1000 } = getBankSourceConfig(source.bank);
@@ -180,7 +198,7 @@ async function matchSource(source, candidateTransactions, aiMatchFn) {
   const bestCandidateLast4 = best ? lastFourOf(best.candidate) : null;
   const hasStrongAnchor = Boolean(
     (sourceLast4 && bestCandidateLast4 && sourceLast4 === bestCandidateLast4) ||
-    (source.refNo && best?.candidate.refNo && source.refNo === best.candidate.refNo)
+    (srcRef && best?.candidate && normalizeRefNo(best.candidate.refNo) === srcRef)
   );
 
   if (best && best.score >= SCORE_AUTO_MERGE_THRESHOLD && hasStrongAnchor) {
@@ -209,6 +227,7 @@ module.exports = {
   passesHardFilters,
   hasConflict,
   lastFourOf,
+  normalizeRefNo,
   SCORE_AUTO_MERGE_THRESHOLD,
   SCORE_AMBIGUOUS_FLOOR,
 };

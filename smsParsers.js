@@ -1,8 +1,20 @@
 /**
- * Deterministic Bank SMS Regex Engine for React Native Expo.
+ * Deterministic Bank SMS Regex Engine.
  * Pure regex filters for ICICI, HDFC, SBI, Axis, IndusInd, and OneCard.
  */
 const { isNonTransactional } = require('./nonTransactional');
+
+function cleanDigits(val) {
+  if (!val) return null;
+  const digits = String(val).replace(/\D/g, '');
+  return digits ? digits.slice(-4) : String(val).trim();
+}
+
+function cleanRefNo(val) {
+  if (!val) return null;
+  const clean = String(val).replace(/^(UPI:?|REF(?:\s*NO\.?)?:?|NO\.?)\s*/i, '').trim();
+  return clean || null;
+}
 
 const SMS_PARSERS = [
   {
@@ -16,13 +28,13 @@ const SMS_PARSERS = [
         return {
           bank: 'ICICI Bank',
           instrument: 'Account',
-          account: m[1] || null,
+          account: cleanDigits(m[1]),
           amount: parseFloat(m[2].replace(/,/g, '')),
           currency: 'INR',
           merchant: (m[4] || m[5]) ? (m[4] || m[5]).trim() : null,
           rawDate: m[3],
           paymentMode: 'UPI',
-          refNo: m[6] || null,
+          refNo: cleanRefNo(m[6]),
           type: 'debit',
           status: 'Approved',
         };
@@ -35,7 +47,7 @@ const SMS_PARSERS = [
         return {
           bank: 'ICICI Bank',
           instrument: m[2] ? m[2].trim() : 'Card',
-          last4: m[3] || null,
+          last4: cleanDigits(m[3]),
           amount: parseFloat(m[1].replace(/,/g, '')),
           currency: 'INR',
           merchant: m[5] ? m[5].trim() : null,
@@ -52,7 +64,7 @@ const SMS_PARSERS = [
         return {
           bank: 'ICICI Bank',
           instrument: 'Credit Card',
-          last4: m[1] || null,
+          last4: cleanDigits(m[1]),
           amount: parseFloat(m[2].replace(/,/g, '')),
           currency: 'INR',
           merchant: m[4] ? m[4].trim() : null,
@@ -69,13 +81,13 @@ const SMS_PARSERS = [
         return {
           bank: 'ICICI Bank',
           instrument: 'Account',
-          account: m[1] || null,
+          account: cleanDigits(m[1]),
           amount: parseFloat(m[2].replace(/,/g, '')),
           currency: 'INR',
           merchant: m[4].trim(),
           rawDate: m[3],
           paymentMode: 'UPI',
-          refNo: m[5],
+          refNo: cleanRefNo(m[5]),
           type: 'credit',
           status: 'Approved',
         };
@@ -88,7 +100,7 @@ const SMS_PARSERS = [
         return {
           bank: 'ICICI Bank',
           instrument: 'Account',
-          account: m[1] || null,
+          account: cleanDigits(m[1]),
           amount: parseFloat(m[2].replace(/,/g, '')),
           currency: 'INR',
           merchant: null,
@@ -111,7 +123,7 @@ const SMS_PARSERS = [
         return {
           bank: 'HDFC Bank',
           instrument: 'Account',
-          account: m[2].replace(/\*/g, ''),
+          account: cleanDigits(m[2]),
           amount: parseFloat(m[1].replace(/,/g, '')),
           currency: 'INR',
           merchant: m[3].trim(),
@@ -128,7 +140,7 @@ const SMS_PARSERS = [
         return {
           bank: 'HDFC Bank',
           instrument: 'Account',
-          account: m[2],
+          account: cleanDigits(m[2]),
           amount: parseFloat(m[1].replace(/,/g, '')),
           currency: 'INR',
           merchant: m[4].trim(),
@@ -136,7 +148,7 @@ const SMS_PARSERS = [
           type: 'credit',
           status: 'Approved',
           paymentMode: 'UPI',
-          refNo: m[5] || null,
+          refNo: cleanRefNo(m[5]),
         };
       }
 
@@ -147,7 +159,7 @@ const SMS_PARSERS = [
         return {
           bank: 'HDFC Bank',
           instrument: 'Credit Card',
-          last4: m[2],
+          last4: cleanDigits(m[2]),
           amount: parseFloat(m[1].replace(/,/g, '')),
           currency: 'INR',
           merchant: m[3].trim(),
@@ -165,14 +177,14 @@ const SMS_PARSERS = [
         return {
           bank: 'HDFC Bank',
           instrument: 'Account',
-          last4: m[2],
+          last4: cleanDigits(m[2]),
           amount: parseFloat(m[1].replace(/,/g, '')),
           currency: 'INR',
           merchant: m[3].trim(),
           rawDate: m[4],
           type: 'debit',
           status: 'Approved',
-          refNo: m[5],
+          refNo: cleanRefNo(m[5]),
         };
       }
 
@@ -193,12 +205,12 @@ const SMS_PARSERS = [
         return {
           bank: 'SBI Card',
           instrument: 'Credit Card',
-          last4: m[2],
+          last4: cleanDigits(m[2]),
           amount: parseFloat(m[1].replace(/,/g, '')),
           currency: 'INR',
           merchant: m[3].trim(),
           rawDate: m[4],
-          refNo: refMatch ? refMatch[1] : null,
+          refNo: refMatch ? cleanRefNo(refMatch[1]) : null,
           type: 'debit',
           status: 'Approved',
         };
@@ -211,13 +223,31 @@ const SMS_PARSERS = [
     name: 'Axis Bank SMS',
     matchSender: (sender, text) => /AXISBK|AXIS/i.test(sender || '') || /Axis Bank/i.test(text || ''),
     parse: (text) => {
-      const re = /(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+spent on Axis Bank (?:Credit|Debit) Card XX(\w+)\s+at\s+(.+?)\s+on\s+([\d]{1,2}-[\w]{3}-[\d]{2,4})/i;
-      const m = text.match(re);
+      // Case 1: "Spent INR 66 Axis Bank Card no. XX9992 23-08-26 17:04:42 IST JJ ENTERPRI Avl Limit: INR 27025.15"
+      let re = /Spent\s+(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+Axis Bank Card no\.\s*(?:XX)?(\w+)\s+([\d-]+(?:\s+[\d:]+(?:\s+IST)?))\s+(.+?)(?:\s+Avl Limit|\s+Not you|\.|$)/i;
+      let m = text.match(re);
       if (m) {
         return {
           bank: 'Axis Bank',
           instrument: 'Card',
-          last4: m[2],
+          last4: cleanDigits(m[2]),
+          amount: parseFloat(m[1].replace(/,/g, '')),
+          currency: 'INR',
+          merchant: m[4].trim(),
+          rawDate: m[3].trim(),
+          type: 'debit',
+          status: 'Approved',
+        };
+      }
+
+      // Case 2: "Rs. 167 spent on Axis Bank Credit Card XX9992 at JJ ENTERPRI on 21-Aug-2026"
+      re = /(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+spent on Axis Bank (?:Credit|Debit)?\s*Card\s*(?:XX)?(\w+)\s+at\s+(.+?)\s+on\s+([\d]{1,2}-[\w]{3}-[\d]{2,4})/i;
+      m = text.match(re);
+      if (m) {
+        return {
+          bank: 'Axis Bank',
+          instrument: 'Card',
+          last4: cleanDigits(m[2]),
           amount: parseFloat(m[1].replace(/,/g, '')),
           currency: 'INR',
           merchant: m[3].trim(),

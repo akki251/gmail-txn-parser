@@ -16,6 +16,7 @@ jobs:
           node-version: 20
       - run: npm install
       - run: npm test
+      - run: npm run test:parser
       - run: npm run test:split
       - run: npm run test:sms
       - run: npm run test:nontransactional

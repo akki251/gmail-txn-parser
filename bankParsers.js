@@ -31,6 +31,12 @@ function senderMatches(sender, text, keywordPattern) {
   return false;
 }
 
+function cleanDigits(val) {
+  if (!val) return null;
+  const digits = String(val).replace(/\D/g, '');
+  return digits ? digits.slice(-4) : String(val).trim();
+}
+
 const BANK_PARSERS = [
   {
     name: 'IndusInd Credit Card',
@@ -43,7 +49,7 @@ const BANK_PARSERS = [
       return {
         bank: 'IndusInd Bank',
         instrument: 'Credit Card',
-        last4: m[1],
+        last4: cleanDigits(m[1]),
         amount: parseFloat(m[2].replace(/,/g, '')),
         currency: 'INR',
         merchant: m[4].trim(),
@@ -64,7 +70,7 @@ const BANK_PARSERS = [
       return {
         bank: 'SBI Card',
         instrument: 'Credit Card',
-        last4: m[2],
+        last4: cleanDigits(m[2]),
         amount: parseFloat(m[1].replace(/,/g, '')),
         currency: 'INR',
         merchant: m[3].trim(),
@@ -88,7 +94,7 @@ const BANK_PARSERS = [
         return {
           bank: 'HDFC Bank',
           instrument: 'Credit Card',
-          last4: m[2],
+          last4: cleanDigits(m[2]),
           amount: parseFloat(m[1].replace(/,/g, '')),
           currency: 'INR',
           merchant: m[3].trim(),
@@ -105,7 +111,7 @@ const BANK_PARSERS = [
         return {
           bank: 'HDFC Bank',
           instrument: 'Account',
-          account: m[2],
+          account: cleanDigits(m[2]),
           amount: parseFloat(m[1].replace(/,/g, '')),
           currency: 'INR',
           merchant: m[3].trim(),
@@ -124,7 +130,7 @@ const BANK_PARSERS = [
         return {
           bank: 'HDFC Bank',
           instrument: 'Account',
-          account: m[2],
+          account: cleanDigits(m[2]),
           amount: parseFloat(m[1].replace(/,/g, '')),
           currency: 'INR',
           merchant: m[4].trim(),
@@ -149,7 +155,7 @@ const BANK_PARSERS = [
         return {
           bank: 'ICICI Bank',
           instrument: 'Debit Card',
-          account: m[2],
+          account: cleanDigits(m[2]),
           amount: parseFloat(m[1].replace(/,/g, '')),
           currency: 'INR',
           merchant: m[4].trim(),
@@ -166,7 +172,7 @@ const BANK_PARSERS = [
         return {
           bank: 'ICICI Bank',
           instrument: 'Account',
-          account: m[1],
+          account: cleanDigits(m[1]),
           amount: parseFloat(m[2].replace(/,/g, '')),
           currency: 'INR',
           merchant: null,
@@ -189,7 +195,7 @@ const BANK_PARSERS = [
       return {
         bank: 'Axis Bank',
         instrument: 'Credit Card',
-        last4: m[3],
+        last4: cleanDigits(m[3]),
         amount: parseFloat(m[1].replace(/,/g, '')),
         currency: 'INR',
         merchant: m[2].trim(),

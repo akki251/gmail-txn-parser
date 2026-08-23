@@ -191,6 +191,13 @@ const cases = [
     aiMatchFn: null,
     expect: { matched: true, method: 'score' },
   },
+  {
+    label: 'P0 Test: masked last4 (XX9992 vs 9992) reconciles cleanly via deterministic Level 2',
+    source: source({ bank: 'Axis Bank', amount: 66, merchant: 'JJ ENTERPRI', last4: '9992', date: '2026-08-23T11:34:49Z' }),
+    candidates: [txn({ bank: 'Axis Bank', amount: 66, merchant: 'JJ ENTERPRI', last4: 'XX9992', date: '2026-08-23T11:34:44Z' })],
+    aiMatchFn: null,
+    expect: { matched: true, method: 'deterministic' },
+  },
 ];
 
 const { hasConflict } = require('./matchingEngine');
@@ -213,9 +220,21 @@ const conf4 = hasConflict({ bank: 'HDFC Bank' }, { bank: 'ICICI Bank' });
 console.log(`${conf4 ? '✓' : '✗'} bank conflict (HDFC vs ICICI) detected: ${conf4}`);
 if (!conf4) process.exit(1);
 
-const conf6 = hasConflict({ last4: '1234', refNo: 'R1' }, { last4: '1234', refNo: 'R1' });
-console.log(`${!conf6 ? '✓' : '✗'} no conflict when identity agrees: ${!conf6}`);
+const conf5 = hasConflict({ last4: 'XX9992' }, { last4: '9992' });
+console.log(`${!conf5 ? '✓' : '✗'} no conflict for masked vs unmasked last4 (XX9992 vs 9992): ${!conf5}`);
+if (conf5) process.exit(1);
+
+const conf6 = hasConflict({ account: 'A/C *6770' }, { account: '6770' });
+console.log(`${!conf6 ? '✓' : '✗'} no conflict for account prefix (A/C *6770 vs 6770): ${!conf6}`);
 if (conf6) process.exit(1);
+
+const conf7 = hasConflict({ refNo: 'UPI: 623503346594' }, { refNo: '623503346594' });
+console.log(`${!conf7 ? '✓' : '✗'} no conflict for refNo prefix (UPI: 623503346594 vs 623503346594): ${!conf7}`);
+if (conf7) process.exit(1);
+
+const conf8 = hasConflict({ last4: '1234', refNo: 'R1' }, { last4: '1234', refNo: 'R1' });
+console.log(`${!conf8 ? '✓' : '✗'} no conflict when identity agrees: ${!conf8}`);
+if (conf8) process.exit(1);
 
 console.log('\n--- matchSource Test Cases ---');
 (async () => {
