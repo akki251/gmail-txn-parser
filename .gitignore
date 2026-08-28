@@ -9,3 +9,5 @@ pipelineStats.json
 *.gguf
 android/
 .idea/
+.agents/
+.codegraph/

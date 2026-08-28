@@ -21,7 +21,10 @@
     "test:dedup": "node test-dedup-integration.js",
     "fetch": "node fetchAndParse.js",
     "cli": "node cli.js",
-    "serve": "node server.js"
+    "serve": "node server.js",
+    "mobile": "npm --prefix mobile start",
+    "mobile:ios": "npm --prefix mobile run ios",
+    "mobile:android": "npm --prefix mobile run android"
   },
   "dependencies": {
     "googleapis": "^144.0.0"
