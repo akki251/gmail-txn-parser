@@ -11,3 +11,5 @@ android/
 .idea/
 .agents/
 .codegraph/
+.env
+.env.*

@@ -23,6 +23,12 @@ const FUTURE_RE = /\b(will be debited|is due|due on|due date|scheduled for|will 
 const FAILED_RE = /\b(failed|declined|rejected|cancelled|cancel|not debited|no amount (was|has been) debited)\b/i;
 const BILL_PAYMENT_RE = /\b(received payment|payment.*received|bill payment.*received)\b/i;
 
+const Classification = Object.freeze({
+  TRANSACTION: 'TRANSACTION',
+  NON_TRANSACTION: 'NON_TRANSACTION',
+  AMBIGUOUS: 'AMBIGUOUS',
+});
+
 function hasCompletedMoneyMovement(text) {
   // Mask out future and negation phrases so "will be debited" or "not debited"
   // do not trigger false positive completion evidence.
@@ -33,38 +39,47 @@ function hasCompletedMoneyMovement(text) {
   return COMPLETED_TRANSACTION_RE.test(withoutFutureOrNegated);
 }
 
-function isNonTransactional(text) {
-  if (!text) return false;
+function classifyMessage(text) {
+  if (!text || !text.trim()) {
+    return Classification.NON_TRANSACTION;
+  }
 
   // 1. Strong evidence of completed money movement wins over footer/unrelated text
   if (hasCompletedMoneyMovement(text)) {
-    return false;
+    return Classification.TRANSACTION;
   }
 
   // 2. Pure future / scheduled notifications without completed money movement
   if (FUTURE_RE.test(text)) {
-    return true;
+    return Classification.NON_TRANSACTION;
   }
 
   // 3. Pure failure / decline notifications without completed money movement
   if (FAILED_RE.test(text)) {
-    return true;
+    return Classification.NON_TRANSACTION;
   }
 
   // 4. Bill payment confirmations
   if (BILL_PAYMENT_RE.test(text)) {
-    return true;
+    return Classification.NON_TRANSACTION;
   }
 
   // 5. OTP, login, or administrative noise
   if (NON_TRANSACTIONAL_RE.test(text)) {
-    return true;
+    return Classification.NON_TRANSACTION;
   }
 
-  return false;
+  // 6. Messages lacking explicit completion verbs but possessing financial context/amounts or unparsed bank patterns
+  return Classification.AMBIGUOUS;
+}
+
+function isNonTransactional(text) {
+  return classifyMessage(text) === Classification.NON_TRANSACTION;
 }
 
 module.exports = {
+  Classification,
+  classifyMessage,
   isNonTransactional,
   COMPLETED_TRANSACTION_RE,
   FUTURE_RE,
@@ -72,3 +87,4 @@ module.exports = {
   NON_TRANSACTIONAL_RE,
   BILL_PAYMENT_RE,
 };
+

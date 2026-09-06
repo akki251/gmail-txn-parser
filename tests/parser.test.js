@@ -14,7 +14,7 @@
 
 'use strict';
 
-const { isNonTransactional } = require('../nonTransactional');
+const { isNonTransactional, classifyMessage, Classification } = require('../nonTransactional');
 const { parseTransactionSms } = require('../smsParsers');
 const corpus = require('./fixtures/corpus.json');
 
@@ -48,6 +48,19 @@ function fail(id, reason) {
 
 function section(name) {
   console.log(`\n${CYAN}${BOLD}${name}${RESET}`);
+}
+
+// ─── Mock Stage 1 LLM Verifier (deterministic) ─────────────────────────────
+async function mockLlmVerify(rawText) {
+  if (/\b(mandate.*(?:revoked|cancelled)|revoked|autopay.*cancelled|limit\s+increase|offer)\b/i.test(rawText)) {
+    return { isTransaction: false, reason: 'Mandate or non-transaction lifecycle event' };
+  }
+  const amtM = rawText.match(/(?:Rs\.?|INR|₹)\s*([\d,]+\.?\d*)/i);
+  const verbM = /\b(debited|credited|spent|paid|withdrawn|transferred|disbursed|charged|refunded)\b/i.test(rawText);
+  if (amtM && verbM) {
+    return { isTransaction: true, reason: 'Found completed money movement' };
+  }
+  return { isTransaction: false, reason: 'No clear money movement evidence' };
 }
 
 // ─── Mock LLM (deterministic — mirrors Llama 3.3 70B expected behaviour) ────
@@ -119,8 +132,17 @@ async function mockLlmFallback(rawText) {
 
 // ─── Full pipeline (mirrors server.js logic, uses mock LLM) ─────────────────
 async function runPipeline(sms) {
-  if (isNonTransactional(sms)) {
+  const classification = classifyMessage(sms);
+  if (classification === Classification.NON_TRANSACTION) {
     return { classification: 'NON_TRANSACTION' };
+  }
+
+  // Stage 1: Verify ambiguous message
+  if (classification === Classification.AMBIGUOUS) {
+    const verification = await mockLlmVerify(sms);
+    if (!verification.isTransaction) {
+      return { classification: 'NON_TRANSACTION' };
+    }
   }
 
   let result = parseTransactionSms({ sender: 'TEST-BANK', text: sms });
@@ -305,6 +327,33 @@ async function runLayer4() {
   }
 }
 
+// ─── LAYER 5: Two-Stage Enum Classification & Stage 1 Verification ──────────
+async function runLayer5() {
+  section('Layer 5 — Two-Stage Enum Classification & Stage 1 Verification');
+
+  const mandateSample = 'Your UPI mandate has been successfully revoked towards Google Asia Pacific Pte.Ltd for INR 5600.00 - Axis Bank';
+  const c = classifyMessage(mandateSample);
+  if (c === Classification.AMBIGUOUS) {
+    pass('mandate-revoked [classifyMessage=AMBIGUOUS]');
+  } else {
+    fail('mandate-revoked', `Expected classifyMessage=AMBIGUOUS, got ${c}`);
+  }
+
+  const v = await mockLlmVerify(mandateSample);
+  if (!v.isTransaction) {
+    pass('mandate-revoked [mockLlmVerify=isTransaction:false]');
+  } else {
+    fail('mandate-revoked', 'Expected mockLlmVerify to reject transaction');
+  }
+
+  const pipeResult = await runPipeline(mandateSample);
+  if (pipeResult.classification === 'NON_TRANSACTION') {
+    pass('mandate-revoked [pipeline=NON_TRANSACTION]');
+  } else {
+    fail('mandate-revoked', `Expected pipeline NON_TRANSACTION, got ${JSON.stringify(pipeResult)}`);
+  }
+}
+
 // ─── Runner ──────────────────────────────────────────────────────────────────
 async function main() {
   console.log(`\n${BOLD}Transaction Parser Regression Suite (Web Branch)${RESET}`);
@@ -314,6 +363,7 @@ async function main() {
   await runLayer2();
   await runLayer3();
   await runLayer4();
+  await runLayer5();
 
   const total = totalPassed + totalFailed;
   console.log(`\n${'─'.repeat(55)}`);

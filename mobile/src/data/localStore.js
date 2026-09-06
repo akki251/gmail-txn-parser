@@ -306,6 +306,26 @@ export const localStore = {
     return newTxn;
   },
 
+  deleteTransaction: async (transactionId) => {
+    const db = await loadLocalDb();
+    if (db.transactions && db.transactions[transactionId]) {
+      delete db.transactions[transactionId];
+    }
+    if (Array.isArray(db.splits)) {
+      db.splits = db.splits.filter((s) => s.transactionId !== transactionId);
+    }
+    if (db.sourceMessages) {
+      for (const [msgId, msg] of Object.entries(db.sourceMessages)) {
+        if (msg.matchedTransactionId === transactionId || msg.id === transactionId) {
+          delete db.sourceMessages[msgId];
+        }
+      }
+    }
+    await saveLocalDb(db);
+    return true;
+  },
+
+
   resetData: async () => {
     const friendsMap = {};
     if (Array.isArray(initialData.friends)) {

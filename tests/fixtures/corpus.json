@@ -105,6 +105,11 @@
     "expected": { "classification": "NON_TRANSACTION" }
   },
   {
+    "id": "upi-mandate-revoked-axis",
+    "sms": "Your UPI mandate has been successfully revoked towards Google Asia Pacific Pte.Ltd for INR 5600.00 - Axis Bank",
+    "expected": { "classification": "NON_TRANSACTION" }
+  },
+  {
     "id": "salary-credit",
     "sms": "Rs.85000.00 credited to your SBI account XX4321 on 01-Aug-26. Your updated balance is Rs.92450.",
     "expected": { "classification": "TRANSACTION", "type": "credit", "amount": 85000 }

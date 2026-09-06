@@ -418,6 +418,29 @@ function settle(friendName, amount) {
   save(db);
 }
 
+function deleteTransaction(id) {
+  const db = load();
+  if (!db.transactions || !db.transactions[id]) return false;
+  delete db.transactions[id];
+
+  // Remove associated splits
+  if (Array.isArray(db.splits)) {
+    db.splits = db.splits.filter((s) => s.transactionId !== id);
+  }
+
+  // Remove or detach source messages
+  if (db.sourceMessages) {
+    for (const [msgId, msg] of Object.entries(db.sourceMessages)) {
+      if (msg.matchedTransactionId === id || msg.id === id) {
+        delete db.sourceMessages[msgId];
+      }
+    }
+  }
+
+  save(db);
+  return true;
+}
+
 module.exports = {
   upsertTransaction,
   listAll,
@@ -432,4 +455,6 @@ module.exports = {
   setAcknowledged,
   listNeedsReview,
   retryNeedsReview,
+  deleteTransaction,
 };
+

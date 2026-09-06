@@ -1,7 +1,7 @@
 const { google } = require('googleapis');
 const { authorize } = require('./auth');
 const { parseTransactionEmail } = require('./bankParsers');
-const { llmFallbackExtract } = require('./llmFallback');
+const { llmFallbackExtract, llmVerifyTransaction } = require('./llmFallback');
 const db = require('./db');
 const stats = require('./pipelineStats');
 
@@ -116,6 +116,13 @@ async function main() {
       stats.recordEvent('aiFallbackCalled');
       stats.recordUnmatchedTemplate(result.sourceParser, result.rawText);
       try {
+        const verification = await llmVerifyTransaction(result.rawText);
+        if (!verification.isTransaction) {
+          stats.recordEvent('filteredNotTransaction');
+          stats.recordEvent('transactionsRejected');
+          continue;
+        }
+
         const extracted = await llmFallbackExtract(result.rawText);
         stats.recordEvent('aiFallbackSuccess');
         if (extracted.notATransaction) {

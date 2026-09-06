@@ -6,7 +6,8 @@ const { execFile } = require('child_process');
 const db = require('./db');
 const { CATEGORIES } = require('./categorize');
 const { parseTransactionSms } = require('./smsParsers');
-const { llmFallbackExtract } = require('./llmFallback');
+const { classifyMessage, Classification } = require('./nonTransactional');
+const { llmFallbackExtract, llmVerifyTransaction } = require('./llmFallback');
 const stats = require('./pipelineStats');
 
 const PORT = 4173;
@@ -188,6 +189,65 @@ async function handleSmsIngest(req, res) {
 
   stats.recordEvent('smsProcessed');
 
+  const classification = classifyMessage(text);
+  if (classification === Classification.NON_TRANSACTION) {
+    stats.recordEvent('filteredNotTransaction');
+    return sendJson(res, 200, { ok: true, stored: false, reason: 'not a transaction' });
+  }
+
+  // Stage 1: If ambiguous, verify with LLM before proceeding to extraction
+  if (classification === Classification.AMBIGUOUS) {
+    // Send HTTP 200 OK immediately for iOS Shortcut 10s timeout
+    sendJson(res, 200, { ok: true, stored: false, reason: 'verifying ambiguous message' });
+
+    (async () => {
+      try {
+        stats.recordEvent('aiFallbackCalled');
+        const verification = await llmVerifyTransaction(text);
+        if (!verification.isTransaction) {
+          stats.recordEvent('filteredNotTransaction');
+          return;
+        }
+
+        // Verified as transaction -> proceed to extraction (Stage 2)
+        let result = parseTransactionSms({ sender, text });
+        if (result && !result.needsLLMFallback && !result.notATransaction) {
+          const isNew = await db.upsertTransaction(id, result, isoDate);
+          if (isNew) stats.recordEvent('transactionsProduced');
+          else stats.recordEvent('transactionsDeduplicated');
+          return;
+        }
+
+        // Deterministic regex did not match -> call extraction LLM
+        const extracted = await llmFallbackExtract(text);
+        stats.recordEvent('aiFallbackSuccess');
+        if (extracted.notATransaction) {
+          stats.recordEvent('filteredNotTransaction');
+          return;
+        }
+        const resolved = { ...extracted, sourceParser: result?.sourceParser || 'SMS Ingest', needsLLMFallback: true };
+        const isNew = await db.upsertTransaction(id, resolved, isoDate);
+        if (isNew) stats.recordEvent('transactionsProduced');
+        else stats.recordEvent('transactionsDeduplicated');
+      } catch (err) {
+        stats.recordEvent('aiFallbackFailure');
+        stats.recordEvent('needsReview');
+        try {
+          await db.upsertTransaction(id, {
+            needsReview: true,
+            sourceParser: 'SMS Ingest',
+            rawText: text,
+            sender,
+          }, isoDate);
+        } catch (dbErr) {
+          console.error('[SMS Ingest needsReview DB Error]:', dbErr);
+        }
+      }
+    })();
+    return;
+  }
+
+  // Classification is TRANSACTION: Try deterministic regex parser
   let result = parseTransactionSms({ sender, text });
   if (!result) return sendJson(res, 200, { ok: true, stored: false, reason: 'not a known SMS sender' });
   if (result.notATransaction) {
@@ -202,10 +262,6 @@ async function handleSmsIngest(req, res) {
     // Send HTTP 200 OK response IMMEDIATELY (prevents iOS Shortcut 10s HTTP timeout)
     sendJson(res, 200, { ok: true, stored: true, needsReview: true });
 
-    // Asynchronously resolve LLM fallback in background — call the LLM
-    // FIRST, then store exactly once: resolved data if the LLM succeeds
-    // (goes straight through the matching engine, no needsReview gap),
-    // or a needsReview placeholder only if the LLM actually fails.
     (async () => {
       try {
         const extracted = await llmFallbackExtract(result.rawText);
@@ -214,6 +270,7 @@ async function handleSmsIngest(req, res) {
           stats.recordEvent('filteredNotTransaction');
           return;
         }
+        const resolved = { ...extracted, sourceParser: result.sourceParser, needsLLMFallback: true };
         const isNew = await db.upsertTransaction(id, resolved, isoDate);
         if (isNew) {
           stats.recordEvent('transactionsProduced');
@@ -223,8 +280,6 @@ async function handleSmsIngest(req, res) {
       } catch (err) {
         stats.recordEvent('aiFallbackFailure');
         stats.recordEvent('needsReview');
-        // LLM failed — store as needsReview so the raw text isn't lost
-        // and retryNeedsReview can heal it on a future fetch run.
         try {
           await db.upsertTransaction(id, {
             needsReview: true,
@@ -330,6 +385,17 @@ async function handleApi(req, res, urlPath) {
       const txn = db.getTransaction(decodeURIComponent(txnDetailMatch[1]));
       if (!txn) return sendJson(res, 404, { error: 'Unknown transaction' });
       return sendJson(res, 200, txn);
+    }
+    if (req.method === 'DELETE' && txnDetailMatch) {
+      const deleted = db.deleteTransaction(decodeURIComponent(txnDetailMatch[1]));
+      if (!deleted) return sendJson(res, 404, { error: 'Transaction not found' });
+      return sendJson(res, 200, { ok: true, deleted: true });
+    }
+    if (req.method === 'POST' && urlPath === '/api/delete-transaction') {
+      const { transactionId } = await readBody(req);
+      if (!transactionId) return sendJson(res, 400, { error: 'transactionId is required' });
+      const deleted = db.deleteTransaction(transactionId);
+      return sendJson(res, 200, { ok: true, deleted });
     }
     if (req.method === 'POST' && urlPath === '/api/acknowledge') {
       const { transactionId, acknowledged } = await readBody(req);
