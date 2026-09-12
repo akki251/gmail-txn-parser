@@ -105,6 +105,16 @@ export const DashboardScreen = ({
           value={metrics.thisMonthSpend}
           style={styles.heroAmount}
         />
+        <View style={styles.netSubtitleRow}>
+          <Text style={styles.netSubtitleText}>
+            Net Outflow:{' '}
+            <Text style={styles.netSubtitleBold}>
+              {metrics.thisMonthNet <= 0
+                ? `+₹${Math.abs(metrics.thisMonthNet || 0).toLocaleString('en-IN')}`
+                : `₹${(metrics.thisMonthNet || 0).toLocaleString('en-IN')}`}
+            </Text>
+          </Text>
+        </View>
 
         {metrics.lastMonthSpend > 0 ? (
           <View style={styles.trendRow}>
@@ -179,12 +189,36 @@ export const DashboardScreen = ({
           style={styles.halfCard}
         />
         <MetricCard
-          label="Spending"
+          label="Gross Spend"
           value={`−₹${metrics.thisMonthSpend.toLocaleString('en-IN')}`}
           icon="arrow-up-right"
           iconColor={COLORS.expense}
+          subtitle={`Net: ${metrics.thisMonthNet <= 0 ? `+₹${Math.abs(metrics.thisMonthNet || 0).toLocaleString('en-IN')}` : `₹${(metrics.thisMonthNet || 0).toLocaleString('en-IN')}`}`}
           style={styles.halfCard}
         />
+      </View>
+
+      {/* Net Outflow Card alongside Gross Spend */}
+      <View style={[styles.netCard, SHADOWS.sm]}>
+        <View style={styles.netCardLeft}>
+          <View style={styles.netIconWrap}>
+            <Feather name="layers" size={15} color={COLORS.primary} />
+          </View>
+          <View>
+            <Text style={styles.netLabel}>NET OUTFLOW</Text>
+            <Text style={styles.netFormula}>Gross spend − credits & refunds</Text>
+          </View>
+        </View>
+        <Text
+          style={[
+            styles.netValue,
+            { color: metrics.thisMonthNet <= 0 ? COLORS.income : COLORS.text },
+          ]}
+        >
+          {metrics.thisMonthNet <= 0
+            ? `+₹${Math.abs(metrics.thisMonthNet || 0).toLocaleString('en-IN')}`
+            : `₹${(metrics.thisMonthNet || 0).toLocaleString('en-IN')}`}
+        </Text>
       </View>
 
       {/* Unsplit Alert Banner */}
@@ -316,6 +350,20 @@ const styles = StyleSheet.create({
     letterSpacing: -1.2,
     marginTop: 4,
   },
+  netSubtitleRow: {
+    marginTop: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  netSubtitleText: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  netSubtitleBold: {
+    color: COLORS.text,
+    fontWeight: '700',
+  },
   trendRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -369,6 +417,47 @@ const styles = StyleSheet.create({
   },
   halfCard: {
     flex: 1,
+  },
+  netCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.bgCard,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 16,
+    padding: 14,
+    marginHorizontal: 16,
+    marginTop: 10,
+  },
+  netCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  netIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: 'rgba(79, 70, 229, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  netLabel: {
+    color: COLORS.textMuted,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  netFormula: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    marginTop: 1,
+  },
+  netValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: -0.3,
   },
   unsplitBanner: {
     flexDirection: 'row',

@@ -51,7 +51,11 @@
       <div class="caption greeting-caption" id="dashboardGreeting">GOOD MORNING</div>
       <h1 class="heading-1">Your finances</h1>
       <div class="display-amount" id="dashSpendingAmount">₹0</div>
-      <div class="caption" style="margin-top: 4px; color: var(--text-muted);">SPENT THIS MONTH</div>
+      <div class="caption" style="margin-top: 4px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+        <span>SPENT THIS MONTH</span>
+        <span style="opacity: 0.5;">•</span>
+        <span>Net Outflow: <strong id="dashHeroNetVal" style="color: var(--text-primary); font-weight: 700;">₹0</strong></span>
+      </div>
       <div class="trend-badge" id="dashSpendingTrend"></div>
 
       <!-- Hero Spending Overview Card -->
@@ -92,10 +96,22 @@
           <div class="summary-trend positive" id="dashIncomeTrend"></div>
         </div>
         <div class="card summary-card">
-          <div class="caption">SPENDING</div>
+          <div class="caption">GROSS SPEND</div>
           <div class="summary-amount" id="dashSpendingCardVal">−₹0</div>
           <div class="summary-trend" id="dashSpendingCardTrend"></div>
         </div>
+      </div>
+
+      <!-- Net Outflow Banner Card -->
+      <div class="card net-outflow-card" id="dashNetOutflowCard" style="margin-top: var(--space-md); padding: var(--space-md) var(--space-lg); display: flex; align-items: center; justify-content: space-between; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="width: 32px; height: 32px; border-radius: 8px; background: rgba(67, 56, 202, 0.08); display: flex; align-items: center; justify-content: center; color: var(--primary); font-size: 15px; font-weight: 700;">⇄</div>
+          <div>
+            <div class="caption" style="font-size: 10px; font-weight: 700; letter-spacing: 0.5px; color: var(--text-muted);">NET OUTFLOW</div>
+            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 1px;">Gross spend − credits & refunds</div>
+          </div>
+        </div>
+        <div id="dashNetOutflowVal" style="font-size: 18px; font-weight: 800; font-feature-settings: 'tnum'; color: var(--text-primary);">₹0</div>
       </div>
 
       <!-- Your Activity Insight Card -->

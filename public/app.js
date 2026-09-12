@@ -309,12 +309,20 @@ function renderDashboard() {
 
   const curSpending = currentMonthTxns.filter(t => t.type === 'debit').reduce((s, t) => s + Number(t.amount || 0), 0);
   const curIncome = currentMonthTxns.filter(t => t.type === 'credit').reduce((s, t) => s + Number(t.amount || 0), 0);
+  const curNet = curSpending - curIncome;
   const prevSpending = prevMonthTxns.filter(t => t.type === 'debit').reduce((s, t) => s + Number(t.amount || 0), 0);
   const prevIncome = prevMonthTxns.filter(t => t.type === 'credit').reduce((s, t) => s + Number(t.amount || 0), 0);
 
   // Primary Spent Amount
   document.getElementById('dashSpendingAmount').textContent = money(curSpending);
   document.getElementById('chartOverviewVal').textContent = money(curSpending);
+
+  // Net Outflow in Hero Subtitle
+  const heroNetEl = document.getElementById('dashHeroNetVal');
+  if (heroNetEl) {
+    heroNetEl.textContent = curNet <= 0 ? `+${money(Math.abs(curNet))}` : money(curNet);
+    heroNetEl.style.color = curNet <= 0 ? 'var(--income)' : 'var(--text-primary)';
+  }
 
   // Primary Trend Badge
   const trendEl = document.getElementById('dashSpendingTrend');
@@ -337,7 +345,7 @@ function renderDashboard() {
     incTrendEl.innerHTML = '';
   }
 
-  // Spending Card
+  // Spending Card (Gross)
   document.getElementById('dashSpendingCardVal').textContent = `−${money(curSpending)}`;
   const spTrendEl = document.getElementById('dashSpendingCardTrend');
   if (prevSpending > 0) {
@@ -346,6 +354,13 @@ function renderDashboard() {
     spTrendEl.innerHTML = `${isUp ? '↑' : '↓'} ${pct}% vs last month`;
   } else {
     spTrendEl.innerHTML = '';
+  }
+
+  // Net Outflow Card
+  const netCardVal = document.getElementById('dashNetOutflowVal');
+  if (netCardVal) {
+    netCardVal.textContent = curNet <= 0 ? `+${money(Math.abs(curNet))}` : money(curNet);
+    netCardVal.style.color = curNet <= 0 ? 'var(--income)' : 'var(--text-primary)';
   }
 
   // Render SVG Hero Spending Chart

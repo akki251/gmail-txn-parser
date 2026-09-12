@@ -197,6 +197,7 @@ export const AppProvider = ({ children }) => {
       thisMonthSpend: Math.round(thisMonthSpend),
       lastMonthSpend: Math.round(lastMonthSpend),
       thisMonthIncome: Math.round(thisMonthIncome),
+      thisMonthNet: Math.round(thisMonthSpend - thisMonthIncome),
       spendTrendPct,
       dailyCumulativeSpend,
       daysInCurrentMonth,
