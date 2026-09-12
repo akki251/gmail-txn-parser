@@ -282,8 +282,9 @@
       </div>
 
       <!-- Action Button -->
-      <div style="margin-top: var(--space-lg); margin-bottom: var(--space-xl);">
+      <div style="margin-top: var(--space-lg); margin-bottom: var(--space-xl); display: flex; flex-direction: column; gap: 10px;">
         <button id="detailSplitBtn" class="btn btn-primary" style="width: 100%; padding: 14px; font-size: 15px;">Split this expense with friends</button>
+        <button id="detailDeleteBtn" class="btn" style="width: 100%; padding: 12px; font-size: 14px; background: rgba(220, 38, 38, 0.08); color: #DC2626; border: 1px solid rgba(220, 38, 38, 0.25); border-radius: var(--radius-md); font-weight: 600; cursor: pointer;">Delete Transaction</button>
       </div>
     </main>
 
@@ -415,9 +416,12 @@
         <div id="rawMessageBox" class="raw-box" style="display: none;"></div>
 
         <!-- Action Buttons -->
-        <div style="display: flex; gap: var(--space-sm); margin-top: var(--space-md);">
-          <button id="sheetSplitBtn" class="btn btn-primary" style="flex: 1;">Split with friends</button>
-          <button id="sheetCloseBtn" class="btn btn-secondary" style="flex: 1;">Close</button>
+        <div style="display: flex; flex-direction: column; gap: var(--space-sm); margin-top: var(--space-md);">
+          <div style="display: flex; gap: var(--space-sm);">
+            <button id="sheetSplitBtn" class="btn btn-primary" style="flex: 1;">Split with friends</button>
+            <button id="sheetCloseBtn" class="btn btn-secondary" style="flex: 1;">Close</button>
+          </div>
+          <button id="sheetDeleteBtn" class="btn" style="width: 100%; padding: 10px; font-size: 13px; background: rgba(220, 38, 38, 0.08); color: #DC2626; border: 1px solid rgba(220, 38, 38, 0.25); border-radius: var(--radius-md); font-weight: 600; cursor: pointer;">Delete Transaction</button>
         </div>
       </div>
     </div>

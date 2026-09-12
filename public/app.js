@@ -894,6 +894,59 @@ function openDetailSheet(txnId) {
     };
   }
 
+  // Delete button (dedicated view)
+  const deleteBtn = document.getElementById('detailDeleteBtn');
+  if (deleteBtn) {
+    deleteBtn.onclick = async () => {
+      if (!confirm('Are you sure you want to delete this transaction? This cannot be undone.')) {
+        return;
+      }
+      try {
+        deleteBtn.disabled = true;
+        deleteBtn.textContent = 'Deleting...';
+        await api('/delete-transaction', { method: 'POST', body: { transactionId: txn.id } });
+        showToast('Transaction deleted');
+        activeTxn = null;
+        await loadAllData();
+        switchTab(previousTab || 'transactions');
+      } catch (err) {
+        alert(err.message || 'Failed to delete transaction');
+      } finally {
+        if (deleteBtn) {
+          deleteBtn.disabled = false;
+          deleteBtn.textContent = 'Delete Transaction';
+        }
+      }
+    };
+  }
+
+  // Delete button (modal sheet fallback)
+  const sheetDeleteBtn = document.getElementById('sheetDeleteBtn');
+  if (sheetDeleteBtn) {
+    sheetDeleteBtn.onclick = async () => {
+      if (!confirm('Are you sure you want to delete this transaction? This cannot be undone.')) {
+        return;
+      }
+      try {
+        sheetDeleteBtn.disabled = true;
+        sheetDeleteBtn.textContent = 'Deleting...';
+        await api('/delete-transaction', { method: 'POST', body: { transactionId: txn.id } });
+        showToast('Transaction deleted');
+        const sheetOverlay = document.getElementById('detailModalOverlay');
+        if (sheetOverlay) sheetOverlay.classList.remove('active');
+        activeTxn = null;
+        await loadAllData();
+      } catch (err) {
+        alert(err.message || 'Failed to delete transaction');
+      } finally {
+        if (sheetDeleteBtn) {
+          sheetDeleteBtn.disabled = false;
+          sheetDeleteBtn.textContent = 'Delete Transaction';
+        }
+      }
+    };
+  }
+
   // Switch views cleanly
   document.querySelectorAll('.view').forEach(v => {
     v.classList.add('hidden');

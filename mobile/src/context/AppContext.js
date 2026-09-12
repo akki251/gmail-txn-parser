@@ -344,6 +344,24 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const handleDeleteTransaction = async (transactionId) => {
+    try {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await localStore.deleteTransaction(transactionId);
+      try {
+        await api.deleteTransaction(transactionId);
+      } catch (apiErr) {
+        console.warn('[API Delete Txn Error]:', apiErr);
+      }
+      await refreshAll(true);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      return { ok: true };
+    } catch (err) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      throw err;
+    }
+  };
+
   const updateServerConfig = async (newUrl, password = null) => {
     const sanitized = await setServerUrl(newUrl);
     setServerUrlState(sanitized);
@@ -377,6 +395,7 @@ export const AppProvider = ({ children }) => {
         handleSetCategory,
         handleAcknowledge,
         handleAddTransaction,
+        handleDeleteTransaction,
         handleResetData,
         handleTriggerSync,
         updateServerConfig,

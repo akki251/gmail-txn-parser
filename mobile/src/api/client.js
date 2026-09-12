@@ -136,6 +136,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ transactionId }),
     }),
+  deleteTransaction: (transactionId) =>
+    request('/api/delete-transaction', {
+      method: 'POST',
+      body: JSON.stringify({ transactionId }),
+    }),
 
   // Split & Friends
   getUnsplit: () => request('/api/unsplit'),

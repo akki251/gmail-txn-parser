@@ -20,8 +20,9 @@ export const TransactionDetailModal = ({
   onOpenSplit,
   onOpenCategoryPicker,
 }) => {
-  const { handleMarkPersonal, handleAcknowledge, handleRetryReview } = useApp();
+  const { handleMarkPersonal, handleAcknowledge, handleRetryReview, handleDeleteTransaction } = useApp();
   const [isRetrying, setIsRetrying] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   if (!transaction) return null;
 
@@ -91,6 +92,31 @@ export const TransactionDetailModal = ({
     } catch (err) {
       Alert.alert('Error', err.message || 'Failed to update acknowledged state');
     }
+  };
+
+  const onDeletePress = () => {
+    Alert.alert(
+      'Delete Transaction',
+      'Are you sure you want to delete this transaction? This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setIsDeleting(true);
+            try {
+              await handleDeleteTransaction(id);
+              onClose();
+            } catch (err) {
+              Alert.alert('Error', err.message || 'Failed to delete transaction');
+            } finally {
+              setIsDeleting(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -244,6 +270,22 @@ export const TransactionDetailModal = ({
             </TouchableOpacity>
           </View>
         )}
+        {/* Delete Transaction Button */}
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={onDeletePress}
+          disabled={isDeleting}
+          activeOpacity={0.7}
+        >
+          {isDeleting ? (
+            <ActivityIndicator size="small" color={COLORS.expense} />
+          ) : (
+            <>
+              <Feather name="trash-2" size={16} color={COLORS.expense} />
+              <Text style={styles.deleteButtonText}>Delete Transaction</Text>
+            </>
+          )}
+        </TouchableOpacity>
       </ScrollView>
     </BottomSheetModal>
   );
@@ -433,5 +475,23 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 13,
     fontWeight: '700',
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(220, 38, 38, 0.25)',
+    backgroundColor: COLORS.expenseBg || 'rgba(220, 38, 38, 0.08)',
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  deleteButtonText: {
+    color: COLORS.expense,
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
