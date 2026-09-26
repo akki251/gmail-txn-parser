@@ -19,6 +19,7 @@
     "test:stats": "node test-pipeline-stats.js",
     "test:matching": "node test-matching-engine.js",
     "test:dedup": "node test-dedup-integration.js",
+    "test:cards": "node tests/cardOptimizer.test.js",
     "fetch": "node fetchAndParse.js",
     "cli": "node cli.js",
     "serve": "node server.js",

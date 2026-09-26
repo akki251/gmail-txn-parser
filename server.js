@@ -447,6 +447,19 @@ async function handleApi(req, res, urlPath) {
       db.settle(friendName, amount);
       return sendJson(res, 200, { ok: true });
     }
+    if (req.method === 'GET' && urlPath === '/api/cards') {
+      const urlObj = new URL(req.url, 'http://localhost');
+      const dateParam = urlObj.searchParams.get('date');
+      const optimizer = db.getCardOptimizer(dateParam ? new Date(dateParam) : new Date());
+      return sendJson(res, 200, optimizer);
+    }
+    if (req.method === 'POST' && urlPath === '/api/cards/update') {
+      const { cardId, limit, statementDay, dueDay, last4, name } = await readBody(req);
+      if (!cardId) return sendJson(res, 400, { error: 'cardId is required' });
+      const updated = db.updateCard(cardId, { limit, statementDay, dueDay, last4, name });
+      if (!updated) return sendJson(res, 404, { error: 'Card not found' });
+      return sendJson(res, 200, { ok: true, card: updated });
+    }
     if (req.method === 'POST' && urlPath === '/api/refresh') {
       return execFile('./fetch-all.sh', [], { cwd: __dirname, timeout: 60000 }, (err, stdout, stderr) => {
         const output = [stdout, stderr, err && !stderr ? err.message : ''].filter(Boolean).join('\n');

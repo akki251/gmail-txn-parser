@@ -428,6 +428,7 @@ function deleteTransaction(id) {
     db.splits = db.splits.filter((s) => s.transactionId !== id);
   }
 
+
   // Remove or detach source messages
   if (db.sourceMessages) {
     for (const [msgId, msg] of Object.entries(db.sourceMessages)) {
@@ -439,6 +440,42 @@ function deleteTransaction(id) {
 
   save(db);
   return true;
+}
+
+// ---- Credit Card Optimizer ----
+const { DEFAULT_CARDS, getOptimizerOverview } = require('./cardOptimizer');
+
+function getCards() {
+  const db = load();
+  if (!db.cards || !Array.isArray(db.cards) || db.cards.length === 0) {
+    return DEFAULT_CARDS;
+  }
+  return db.cards;
+}
+
+function updateCard(cardId, updates) {
+  const db = load();
+  if (!db.cards || !Array.isArray(db.cards)) {
+    db.cards = JSON.parse(JSON.stringify(DEFAULT_CARDS));
+  }
+  const idx = db.cards.findIndex(c => c.id === cardId);
+  if (idx === -1) {
+    return null;
+  }
+  // Sanitize numeric inputs
+  if (updates.limit !== undefined) updates.limit = Number(updates.limit) || db.cards[idx].limit;
+  if (updates.statementDay !== undefined) updates.statementDay = Number(updates.statementDay) || db.cards[idx].statementDay;
+  if (updates.dueDay !== undefined) updates.dueDay = Number(updates.dueDay) || db.cards[idx].dueDay;
+
+  db.cards[idx] = { ...db.cards[idx], ...updates };
+  save(db);
+  return db.cards[idx];
+}
+
+function getCardOptimizer(asOfDate) {
+  const cards = getCards();
+  const txns = listAll();
+  return getOptimizerOverview(cards, txns, asOfDate);
 }
 
 module.exports = {
@@ -456,5 +493,9 @@ module.exports = {
   listNeedsReview,
   retryNeedsReview,
   deleteTransaction,
+  getCards,
+  updateCard,
+  getCardOptimizer,
 };
+
 

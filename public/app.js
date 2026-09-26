@@ -247,11 +247,12 @@ function generateInsights(txns = [], activeCtx) {
 // ---- Data Loader & Render Cycle ----
 async function loadAllData() {
   try {
-    const [txns, categories, friends, ledgerData] = await Promise.all([
+    const [txns, categories, friends, ledgerData, cardOpt] = await Promise.all([
       api('/transactions'),
       api('/categories').catch(() => []),
       api('/friends').catch(() => []),
       api('/ledger').catch(() => ({})),
+      api('/cards').catch(() => null),
     ]);
 
     allTransactions = Array.isArray(txns)
@@ -265,6 +266,7 @@ async function loadAllData() {
     allCategories = Array.isArray(categories) ? categories : [];
     allFriends = Array.isArray(friends) ? friends : [];
     window._ledger = ledgerData || {};
+    if (cardOpt) cardOptimizerData = cardOpt;
 
     hideLogin();
     renderApp();
@@ -279,6 +281,7 @@ function renderApp() {
   renderSplitter();
   renderLedger();
   renderInsights();
+  renderCardOptimizer();
 }
 
 // ---- 1. RENDER DASHBOARD (Exact Android Replica) ----
@@ -390,6 +393,9 @@ function renderDashboard() {
       row.onclick = () => openDetailSheet(row.dataset.id);
     });
   }
+
+  // Update Card Optimizer Quick Banner on Dashboard
+  updateDashboardCardBanner();
 }
 
 // ---- SVG Hero Spending Curve ----
@@ -1011,6 +1017,279 @@ async function setDetailCategory(cat) {
   }
 }
 
+// ---- 6. CREDIT CARDS & BILLING CYCLE OPTIMIZER ----
+let cardOptimizerData = null;
+let currentSimDate = new Date();
+
+async function fetchAndRenderCardOptimizer(date = currentSimDate) {
+  try {
+    const d = date instanceof Date && !isNaN(date.getTime()) ? date : new Date();
+    currentSimDate = d;
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const dateParam = `${yyyy}-${mm}-${dd}`;
+    const data = await api(`/cards?date=${dateParam}`);
+    if (data) {
+      cardOptimizerData = data;
+      renderCardOptimizer();
+      updateDashboardCardBanner();
+    }
+  } catch (err) {
+    console.warn('[Card Optimizer Fetch Error]:', err);
+  }
+}
+
+function updateDashboardCardBanner() {
+  const banner = document.getElementById('dashCardBanner');
+  if (!banner) return;
+
+  if (cardOptimizerData && cardOptimizerData.recommendation && cardOptimizerData.recommendation.topCard) {
+    const { topCard } = cardOptimizerData.recommendation;
+    const titleEl = document.getElementById('dashBestCardTitle');
+    const subEl = document.getElementById('dashBestCardSub');
+    if (titleEl) titleEl.textContent = `${topCard.name} (${topCard.last4})`;
+    if (subEl) {
+      const nextDueStr = topCard.cycle?.nextDueDate ? new Date(topCard.cycle.nextDueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'next month';
+      subEl.textContent = `~${topCard.cycle?.interestFreeDays || 42} days repayment buffer • Bill due ${nextDueStr}`;
+    }
+  }
+}
+
+function renderCardOptimizer() {
+  if (!cardOptimizerData) return;
+
+  const { cards, recommendation, asOfDay, asOfDate } = cardOptimizerData;
+  const dObj = new Date(asOfDate);
+
+  // Sync date input
+  const dateInput = document.getElementById('cardSimDate');
+  if (dateInput) {
+    const yyyy = dObj.getFullYear();
+    const mm = String(dObj.getMonth() + 1).padStart(2, '0');
+    const dd = String(dObj.getDate()).padStart(2, '0');
+    dateInput.value = `${yyyy}-${mm}-${dd}`;
+  }
+
+  // 1. Render Hero Recommendation
+  if (recommendation && recommendation.topCard) {
+    const { topCard } = recommendation;
+    const heroName = document.getElementById('cardHeroName');
+    const heroSub = document.getElementById('cardHeroSub');
+    const heroBadge = document.getElementById('cardHeroBadge');
+    const heroPill = document.getElementById('cardHeroRunwayPill');
+    const heroRunwayDays = document.getElementById('cardHeroRunwayDays');
+    const heroNextStmnt = document.getElementById('cardHeroNextStmnt');
+    const heroDaysToStmnt = document.getElementById('cardHeroDaysToStmnt');
+    const heroNextDue = document.getElementById('cardHeroNextDue');
+    const heroReason = document.getElementById('cardHeroReason');
+
+    if (heroName) heroName.textContent = `${topCard.name} ${topCard.last4}`;
+    if (heroSub) heroSub.textContent = `${topCard.variant} • Statement: ${topCard.statementDay}th • Best spend: ${topCard.bestSpendWindow || 'after statement'}`;
+    
+    if (topCard.cycle) {
+      if (heroPill) heroPill.textContent = `${topCard.cycle.interestFreeDays} Days Runway`;
+      if (heroRunwayDays) heroRunwayDays.textContent = `${topCard.cycle.interestFreeDays} Days`;
+      
+      const stmntDate = new Date(topCard.cycle.nextStatementDate);
+      if (heroNextStmnt) heroNextStmnt.textContent = stmntDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+      if (heroDaysToStmnt) heroDaysToStmnt.textContent = `In ${topCard.cycle.daysUntilNextStatement} days`;
+
+      const dueDate = new Date(topCard.cycle.nextDueDate);
+      if (heroNextDue) heroNextDue.textContent = dueDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+    }
+
+    if (heroReason) {
+      heroReason.textContent = recommendation.recommendationReason || `${topCard.name} gives maximum repayment buffer as of today.`;
+    }
+
+    if (heroBadge) {
+      if (topCard.cycle?.cycleStatus === 'fresh') {
+        heroBadge.textContent = '⚡ FRESH BILLING CYCLE — BEST TIME TO SPEND';
+      } else if (topCard.cycle?.cycleStatus === 'statement_day') {
+        heroBadge.textContent = '⚠️ STATEMENT CLOSES TODAY — USE UPI';
+      } else {
+        heroBadge.textContent = 'TOP PICK FOR BIG TRANSACTIONS';
+      }
+    }
+  }
+
+  // 2. Render Card Utilization List
+  const utilContainer = document.getElementById('cardUtilizationList');
+  if (utilContainer && Array.isArray(cards)) {
+    utilContainer.innerHTML = cards.map(c => {
+      const util = c.utilization || { currentCycleSpend: 0, limit: 100000, utilizationPercent: 0, availableLimit: 100000, utilizationStatus: 'optimal' };
+      const cycle = c.cycle || { statusBadge: 'Good', interestFreeDays: 30 };
+      const fillClass = util.utilizationStatus === 'high' ? 'fill-high' : util.utilizationStatus === 'moderate' ? 'fill-moderate' : 'fill-optimal';
+
+      let cyclePillClass = 'badge-optimal';
+      if (cycle.cycleStatus === 'fresh') cyclePillClass = 'badge-fresh';
+      else if (cycle.cycleStatus === 'statement_day' || cycle.cycleStatus === 'avoid') cyclePillClass = 'badge-statement';
+
+      return `
+        <div class="card-util-item">
+          <div class="card-util-top">
+            <div class="card-util-title-wrap">
+              <div class="card-color-dot" style="background: ${c.themeColor || '#4338CA'};"></div>
+              <div>
+                <div class="card-util-name">${escapeHtml(c.name)} <span style="font-weight: 500; font-size: 13px; color: var(--text-muted);">${escapeHtml(c.last4 || '')}</span></div>
+                <div class="card-util-variant">${escapeHtml(c.description || c.variant || '')}</div>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="card-util-badge ${cyclePillClass}">${escapeHtml(cycle.statusBadge)}</span>
+              <button class="card-util-edit-btn" onclick="openCardEditModal('${c.id}')">Edit</button>
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: baseline;">
+            <div style="font-size: 13px; color: var(--text-secondary);">
+              Cycle Spend: <strong style="color: var(--text-primary); font-size: 15px; font-feature-settings: 'tnum';">₹${util.currentCycleSpend.toLocaleString('en-IN')}</strong>
+            </div>
+            <div style="font-size: 12px; font-weight: 700; color: var(--text-muted);">
+              Limit: ₹${util.limit.toLocaleString('en-IN')}
+            </div>
+          </div>
+
+          <div class="card-util-bar-track">
+            <div class="card-util-bar-fill ${fillClass}" style="width: ${Math.max(2, Math.min(100, util.utilizationPercent))}%;"></div>
+          </div>
+
+          <div class="card-util-meta">
+            <span>Utilization: <strong style="color: ${util.utilizationStatus === 'high' ? 'var(--expense)' : 'var(--text-primary)'};">${util.utilizationPercent}%</strong></span>
+            <span>Available: <strong>₹${util.availableLimit.toLocaleString('en-IN')}</strong> (${cycle.interestFreeDays}d runway)</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // 3. Render Calendar
+  renderCardCalendar();
+}
+
+function renderCardCalendar() {
+  if (!cardOptimizerData || !cardOptimizerData.calendar) return;
+
+  const grid = document.getElementById('statementCalendarGrid');
+  const caption = document.getElementById('calendarMonthCaption');
+  if (!grid) return;
+
+  const { calendar, year, asOfDay } = cardOptimizerData;
+  const monthName = cardOptimizerData.monthName || 'Month';
+  if (caption) {
+    caption.textContent = `${monthName} ${year} • Daily Optimal Card Map`;
+  }
+
+  // Determine starting blank slots for Monday-start calendar
+  const firstDayOfWeek = calendar[0] ? calendar[0].dayOfWeek : 1;
+  const mondayOffset = (firstDayOfWeek + 6) % 7; // Mon -> 0, Tue -> 1 ... Sun -> 6
+
+  let html = '';
+  for (let i = 0; i < mondayOffset; i++) {
+    html += '<div class="cal-day-cell" style="opacity: 0.25; background: none; border-style: dashed; cursor: default;"></div>';
+  }
+
+  calendar.forEach(item => {
+    const isToday = item.day === asOfDay;
+    const isSelected = item.day === currentSimDate.getDate() && currentSimDate.getMonth() === (new Date(item.date).getMonth());
+
+    let badgeClass = 'badge-card-upi';
+    if (item.cardKey === 'icici') badgeClass = 'badge-card-icici';
+    else if (item.cardKey === 'indusind') badgeClass = 'badge-card-indusind';
+    else if (item.cardKey === 'supermoney') badgeClass = 'badge-card-supermoney';
+    else if (item.cardKey === 'swiggy_hdfc') badgeClass = 'badge-card-swiggy';
+    else if (item.cardKey === 'flipkart_axis') badgeClass = 'badge-card-flipkart';
+    else if (item.cardKey === 'sbi_phonepe') badgeClass = 'badge-card-sbi';
+    else if (item.cardKey === 'indian_bank') badgeClass = 'badge-card-indian';
+
+    const cellClass = [
+      'cal-day-cell',
+      item.isUpi ? 'cal-statement' : '',
+      isToday ? 'cal-today' : '',
+      isSelected ? 'cal-selected' : '',
+    ].filter(Boolean).join(' ');
+
+    const cardShortName = item.displayCard.replace(' Bank', '');
+
+    html += `
+      <div class="${cellClass}" onclick="selectCalendarDay('${item.date}')" title="${escapeHtml(item.note)}">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span class="cal-day-num">${item.day}</span>
+          ${isToday ? '<span style="font-size: 8px; font-weight: 800; color: var(--primary);">TODAY</span>' : ''}
+        </div>
+        <div class="cal-card-badge ${badgeClass}">${escapeHtml(cardShortName)}</div>
+        <div class="cal-day-status">${escapeHtml(item.note)}</div>
+      </div>
+    `;
+  });
+
+  grid.innerHTML = html;
+}
+
+function selectCalendarDay(dateStr) {
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    currentSimDate = d;
+    fetchAndRenderCardOptimizer(d);
+  }
+}
+
+function openCardEditModal(cardId) {
+  if (!cardOptimizerData || !Array.isArray(cardOptimizerData.cards)) return;
+  const card = cardOptimizerData.cards.find(c => c.id === cardId);
+  if (!card) return;
+
+  document.getElementById('editCardId').value = card.id;
+  document.getElementById('cardEditModalTitle').textContent = `Edit ${card.name}`;
+  document.getElementById('editCardLimit').value = card.limit || 100000;
+  document.getElementById('editCardStatementDay').value = card.statementDay || 1;
+  document.getElementById('editCardDueDay').value = card.dueDay || 5;
+
+  const overlay = document.getElementById('cardEditModalOverlay');
+  if (overlay) {
+    overlay.style.display = 'flex';
+    requestAnimationFrame(() => overlay.classList.add('active'));
+  }
+}
+
+function closeCardEditModal() {
+  const overlay = document.getElementById('cardEditModalOverlay');
+  if (overlay) {
+    overlay.classList.remove('active');
+    setTimeout(() => { overlay.style.display = 'none'; }, 250);
+  }
+}
+
+async function saveCardEdit() {
+  const cardId = document.getElementById('editCardId').value;
+  const limit = Number(document.getElementById('editCardLimit').value);
+  const statementDay = Number(document.getElementById('editCardStatementDay').value);
+  const dueDay = Number(document.getElementById('editCardDueDay').value);
+
+  if (!cardId || isNaN(limit) || isNaN(statementDay) || isNaN(dueDay)) {
+    alert('Please enter valid numbers for limit and dates.');
+    return;
+  }
+
+  try {
+    await api('/cards/update', {
+      method: 'POST',
+      body: JSON.stringify({ cardId, limit, statementDay, dueDay }),
+    });
+    closeCardEditModal();
+    showToast('Card settings updated successfully!');
+    await fetchAndRenderCardOptimizer(currentSimDate);
+  } catch (err) {
+    alert(`Failed to update card: ${err.message}`);
+  }
+}
+
+// Global hooks for inline onclick handlers
+window.openCardEditModal = openCardEditModal;
+window.selectCalendarDay = selectCalendarDay;
+
 // ---- TAB SWITCHING ----
 function switchTab(tabId) {
   activeTab = tabId;
@@ -1027,6 +1306,7 @@ function switchTab(tabId) {
   const viewMap = {
     dashboard: 'dashboardView',
     transactions: 'transactionsView',
+    cards: 'cardsView',
     splitter: 'splitterView',
     ledger: 'ledgerView',
     insights: 'insightsView',
@@ -1043,6 +1323,10 @@ function switchTab(tabId) {
     targetView.classList.remove('hidden');
     targetView.style.display = 'block';
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  if (tabId === 'cards') {
+    fetchAndRenderCardOptimizer(currentSimDate);
   }
 }
 
@@ -1175,6 +1459,48 @@ function init() {
     attemptLogin();
   });
   document.getElementById('loginSubmitBtn')?.addEventListener('click', attemptLogin);
+
+  // Card Optimizer Banner on Dashboard
+  document.getElementById('dashCardBanner')?.addEventListener('click', () => {
+    switchTab('cards');
+  });
+
+  // Card Simulator Controls
+  document.getElementById('cardSimDate')?.addEventListener('change', (e) => {
+    if (e.target.value) selectCalendarDay(e.target.value);
+  });
+  document.getElementById('cardSimTodayBtn')?.addEventListener('click', () => {
+    const today = new Date();
+    currentSimDate = today;
+    fetchAndRenderCardOptimizer(today);
+  });
+
+  // Calendar Month Navigation
+  document.getElementById('calPrevMonthBtn')?.addEventListener('click', () => {
+    const curMonth = currentSimDate.getMonth();
+    const curYear = currentSimDate.getFullYear();
+    const prevDate = new Date(curYear, curMonth - 1, 1);
+    currentSimDate = prevDate;
+    fetchAndRenderCardOptimizer(prevDate);
+  });
+
+  document.getElementById('calNextMonthBtn')?.addEventListener('click', () => {
+    const curMonth = currentSimDate.getMonth();
+    const curYear = currentSimDate.getFullYear();
+    const nextDate = new Date(curYear, curMonth + 1, 1);
+    currentSimDate = nextDate;
+    fetchAndRenderCardOptimizer(nextDate);
+  });
+
+  // Card Edit Modal Bindings
+  document.getElementById('cardEditCancelBtn')?.addEventListener('click', closeCardEditModal);
+  document.getElementById('cardEditSaveBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    saveCardEdit();
+  });
+  document.getElementById('cardEditModalOverlay')?.addEventListener('click', (e) => {
+    if (e.target.id === 'cardEditModalOverlay') closeCardEditModal();
+  });
 
   // Load data immediately
   loadAllData();

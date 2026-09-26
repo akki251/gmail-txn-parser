@@ -40,6 +40,7 @@
     <nav class="top-nav-bar" id="topNavBar">
       <button class="top-nav-tab active" data-tab="dashboard">Finances</button>
       <button class="top-nav-tab" data-tab="transactions">Txns</button>
+      <button class="top-nav-tab" data-tab="cards">Cards</button>
       <button class="top-nav-tab" data-tab="splitter">Split</button>
       <button class="top-nav-tab" data-tab="ledger">Ledger</button>
       <button class="top-nav-tab" data-tab="insights">Insights</button>
@@ -112,6 +113,21 @@
           </div>
         </div>
         <div id="dashNetOutflowVal" style="font-size: 18px; font-weight: 800; font-feature-settings: 'tnum'; color: var(--text-primary);">₹0</div>
+      </div>
+
+      <!-- Card Optimizer Dashboard Banner -->
+      <div class="card card-optimizer-banner" id="dashCardBanner" style="margin-top: var(--space-md); padding: 14px 16px; cursor: pointer; border-left: 4px solid #C8222A; background: var(--surface);">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+          <div style="display: flex; align-items: center; gap: 12px; min-width: 0;">
+            <div style="width: 38px; height: 38px; border-radius: 10px; background: rgba(200, 34, 42, 0.1); color: #C8222A; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; flex-shrink: 0;" id="dashCardBannerIcon">💳</div>
+            <div style="min-width: 0;">
+              <div class="caption" style="font-size: 10px; font-weight: 700; color: #C8222A; letter-spacing: 0.5px;">BEST CARD FOR BIG SPENDS TODAY</div>
+              <div style="font-size: 15px; font-weight: 700; color: var(--text-primary); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" id="dashBestCardTitle">ICICI Bank (XX3006)</div>
+              <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;" id="dashBestCardSub">~42 days repayment buffer • Bill due Nov 7</div>
+            </div>
+          </div>
+          <button class="see-all-btn" style="font-size: 13px; font-weight: 700; white-space: nowrap; flex-shrink: 0;">Optimize →</button>
+        </div>
       </div>
 
       <!-- Your Activity Insight Card -->
@@ -237,7 +253,117 @@
       <div class="card" id="insightsRecurringCard" style="margin-top: 0;"></div>
     </main>
 
-    <!-- 6. TRANSACTION DETAIL VIEW (Dedicated Full Screen) -->
+    <!-- 6. CARDS & STATEMENT OPTIMIZER VIEW -->
+    <main id="cardsView" class="view hidden">
+      <!-- Title & Date Selector -->
+      <div class="cards-header-wrap">
+        <div>
+          <h1 class="heading-1">Card optimizer</h1>
+          <div class="caption" style="margin-top: 4px; color: var(--text-secondary);">REPAYMENT RUNWAY & LIMIT UTILIZATION</div>
+        </div>
+        <div class="cards-sim-controls">
+          <input type="date" id="cardSimDate" class="card-date-input" title="Simulate spending on any date" />
+          <button id="cardSimTodayBtn" class="btn btn-secondary-pill">Today</button>
+        </div>
+      </div>
+
+      <!-- Hero Recommendation Card for Selected Date -->
+      <div class="card card-hero-rec" id="cardHeroRecCard">
+        <div class="card-hero-rec-header">
+          <span class="card-rec-badge" id="cardHeroBadge">TOP PICK FOR BIG TRANSACTIONS</span>
+          <span class="card-runway-pill" id="cardHeroRunwayPill">42 Days Runway</span>
+        </div>
+        <div style="margin-top: 14px;">
+          <h2 class="card-hero-name" id="cardHeroName">ICICI Bank XX3006</h2>
+          <div class="card-hero-sub" id="cardHeroSub">Statement: 21st • Due: ~7th (next month)</div>
+        </div>
+        
+        <div class="card-hero-stats-grid">
+          <div class="card-stat-box">
+            <div class="caption" style="font-size: 10px; color: rgba(255,255,255,0.7);">REPAYMENT BUFFER</div>
+            <div class="card-stat-num" id="cardHeroRunwayDays">42 Days</div>
+            <div class="card-stat-desc">Zero month-end load</div>
+          </div>
+          <div class="card-stat-box">
+            <div class="caption" style="font-size: 10px; color: rgba(255,255,255,0.7);">NEXT STATEMENT</div>
+            <div class="card-stat-num" id="cardHeroNextStmnt">Oct 21</div>
+            <div class="card-stat-desc" id="cardHeroDaysToStmnt">In 25 days</div>
+          </div>
+          <div class="card-stat-box">
+            <div class="caption" style="font-size: 10px; color: rgba(255,255,255,0.7);">PAYMENT DUE</div>
+            <div class="card-stat-num" id="cardHeroNextDue">Nov 7</div>
+            <div class="card-stat-desc">After Nov 1 salary</div>
+          </div>
+        </div>
+
+        <div class="card-hero-reason-box" id="cardHeroReason">
+          ICICI Bank statement generated on 21st (5 days ago). You get ~42 days to repay (due 7 Nov), with zero month-end bill shock.
+        </div>
+      </div>
+
+      <!-- Card Utilization Section -->
+      <div class="section-header" style="margin-top: var(--space-xl);">
+        <div>
+          <h2 class="heading-2">Card limit utilization</h2>
+          <div class="caption" style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Keep under 30% to protect credit score & avoid bill shock</div>
+        </div>
+      </div>
+      <div id="cardUtilizationList" class="card-utilization-grid">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <!-- Monthly Statement & Spend Calendar -->
+      <div class="section-header" style="margin-top: var(--space-xl); display: flex; align-items: center; justify-content: space-between;">
+        <div>
+          <h2 class="heading-2">Billing cycle calendar</h2>
+          <div class="caption" id="calendarMonthCaption" style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Optimal daily card mapping</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <button id="calPrevMonthBtn" class="icon-btn" style="width: 32px; height: 32px;" title="Previous Month">‹</button>
+          <button id="calNextMonthBtn" class="icon-btn" style="width: 32px; height: 32px;" title="Next Month">›</button>
+        </div>
+      </div>
+
+      <!-- Calendar Matrix -->
+      <div class="card calendar-card" style="padding: 14px; overflow-x: auto;">
+        <div class="calendar-weekdays">
+          <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+        </div>
+        <div class="calendar-grid" id="statementCalendarGrid">
+          <!-- Calendar cells rendered dynamically -->
+        </div>
+        <div class="calendar-legend">
+          <div class="legend-item"><span class="legend-dot dot-best"></span> Best to use (Fresh cycle)</div>
+          <div class="legend-item"><span class="legend-dot dot-good"></span> Good window / Use freely</div>
+          <div class="legend-item"><span class="legend-dot dot-statement"></span> Statement day (Use UPI buffer)</div>
+        </div>
+      </div>
+
+      <!-- Quick Rules & Strategy -->
+      <div class="section-header" style="margin-top: var(--space-xl);">
+        <h2 class="heading-2">Rules for big transactions</h2>
+      </div>
+      <div class="card" style="padding: 18px;">
+        <div class="rule-item">
+          <div class="rule-num">1</div>
+          <div class="rule-text"><strong>Spend right after statement date:</strong> Gives maximum 40–50 days of interest-free credit and pushes billing after your 1st of the month salary.</div>
+        </div>
+        <div class="rule-item">
+          <div class="rule-num">2</div>
+          <div class="rule-text"><strong>Avoid large purchases 1–2 days before statement close:</strong> Billed immediately in the next 15–20 days, causing immediate month-end cash crunch.</div>
+        </div>
+        <div class="rule-item">
+          <div class="rule-num">3</div>
+          <div class="rule-text"><strong>Keep utilization under 30%:</strong> If a card's current cycle spend nears 30% of its limit, switch to your runner-up card or UPI buffer.</div>
+        </div>
+        <div class="rule-item">
+          <div class="rule-num">4</div>
+          <div class="rule-text"><strong>Use UPI on statement days:</strong> Instant settlement ensures pending transactions don't accidentally close into the same day's statement.</div>
+        </div>
+      </div>
+    </main>
+
+    <!-- 7. TRANSACTION DETAIL VIEW (Dedicated Full Screen) -->
     <main id="detailView" class="view hidden">
       <button id="detailBackBtn" class="see-all-btn" style="margin-bottom: var(--space-md); font-size: 15px; cursor: pointer;">
         ← Back
@@ -320,6 +446,14 @@
           <line x1="2" x2="22" y1="10" y2="10"></line>
         </svg>
         <span>Txns</span>
+      </button>
+
+      <button class="nav-tab" data-tab="cards">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+          <line x1="2" y1="10" x2="22" y2="10"></line>
+        </svg>
+        <span>Cards</span>
       </button>
 
       <button class="nav-tab" data-tab="splitter">
@@ -462,6 +596,42 @@
           <input type="password" id="loginPasswordInput" class="app-input" placeholder="Enter password" style="width: 100%; margin-bottom: var(--space-md); text-align: center; font-size: 16px;" autofocus />
           <div id="loginError" style="color: var(--expense); font-size: 13px; font-weight: 600; margin-bottom: var(--space-md); display: none;">Incorrect password</div>
           <button type="submit" id="loginSubmitBtn" class="btn btn-primary" style="width: 100%; padding: 14px; font-size: 15px;">Unlock Dashboard</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Card Edit Modal -->
+    <div id="cardEditModalOverlay" class="modal-overlay">
+      <div class="modal-sheet">
+        <div class="sheet-handle"></div>
+        <h3 class="heading-2" id="cardEditModalTitle">Edit card settings</h3>
+        <p style="color: var(--text-secondary); font-size: 14px; margin-top: 4px;">Update credit limit or billing statement dates.</p>
+        
+        <form id="cardEditForm" style="margin-top: 18px; display: flex; flex-direction: column; gap: 14px;" onsubmit="return false;">
+          <input type="hidden" id="editCardId" />
+          
+          <div>
+            <label style="font-size: 11px; font-weight: 700; color: var(--text-secondary); letter-spacing: 0.5px;">TOTAL CREDIT LIMIT (₹)</label>
+            <input type="number" id="editCardLimit" class="app-input" style="width: 100%; margin-top: 6px; font-size: 16px; font-weight: 700;" required min="1000" step="5000" />
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div>
+              <label style="font-size: 11px; font-weight: 700; color: var(--text-secondary); letter-spacing: 0.5px;">STATEMENT DAY</label>
+              <input type="number" id="editCardStatementDay" class="app-input" style="width: 100%; margin-top: 6px; font-size: 16px;" required min="1" max="31" />
+              <span style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 4px;">Day of month (1-31)</span>
+            </div>
+            <div>
+              <label style="font-size: 11px; font-weight: 700; color: var(--text-secondary); letter-spacing: 0.5px;">PAYMENT DUE DAY</label>
+              <input type="number" id="editCardDueDay" class="app-input" style="width: 100%; margin-top: 6px; font-size: 16px;" required min="1" max="31" />
+              <span style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 4px;">Due date of bill</span>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 10px; margin-top: 10px;">
+            <button type="button" id="cardEditCancelBtn" class="btn btn-secondary" style="flex: 1; padding: 12px; font-weight: 600;">Cancel</button>
+            <button type="submit" id="cardEditSaveBtn" class="btn btn-primary" style="flex: 1; padding: 12px; font-weight: 700;">Save Changes</button>
+          </div>
         </form>
       </div>
     </div>
