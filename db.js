@@ -136,11 +136,13 @@ async function upsertTransaction(messageId, parsed, date) {
     if (matchResult) {
       const eventByMethod = {
         reference: 'matchedByReference',
+        'reference-partial': 'matchedByReference',
         deterministic: 'matchedByDeterministic',
         score: 'matchedByScore',
         ai: 'matchedByAI',
       };
-      stats.recordEvent(eventByMethod[matchResult.method]);
+      const eventName = eventByMethod[matchResult.method] || 'matchedByReference';
+      stats.recordEvent(eventName);
 
       const target = db.transactions[matchResult.matchedTransaction.id];
       target.sourceIds = [...(target.sourceIds || [target.id]), messageId];
