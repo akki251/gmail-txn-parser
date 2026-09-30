@@ -85,6 +85,7 @@ async function callChatCompletion({ messages, responseFormat = { type: 'json_obj
             body: JSON.stringify({
               model,
               messages,
+              max_tokens: 300,
               response_format: responseFormat,
             }),
           });
@@ -127,6 +128,7 @@ async function callChatCompletion({ messages, responseFormat = { type: 'json_obj
     body: JSON.stringify({
       model: 'meta-llama/llama-3.3-70b-instruct',
       messages,
+      max_tokens: 300,
       response_format: responseFormat,
     }),
   });

@@ -48,6 +48,11 @@ const fixtures = [
     text: 'Sent Rs.1.00\nFrom HDFC Bank A/C *6770\nTo AKSHANSH SHRIVASTAVA\nOn 17/08/26\nRef 622935692991\nNot You?\nCall 18002586161/SMS BLOCK UPI to 7308080808',
   },
   {
+    label: 'ICICI — Credit Card debit with merchant & Info',
+    sender: 'ICICIB-S',
+    text: 'Dear Customer, your ICICI Bank Credit Card XX3249 has been debited for INR 3,249.00 on 29-Sep-26 at AMAZON INDIA. Info: VPS*Amazon.',
+  },
+  {
     label: 'Random personal text — should be IGNORED (not a bank sender)',
     sender: '+919876543210',
     text: 'Can I call you later?',

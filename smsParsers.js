@@ -74,6 +74,26 @@ const SMS_PARSERS = [
         };
       }
 
+      // Case 3b: Card or Account debited (e.g. "Dear Customer, your ICICI Bank Credit Card XX3249 has been debited for INR 3,249.00 on 29-Sep-26 at AMAZON INDIA. Info: VPS*Amazon.")
+      re = /(?:Dear Customer,\s*)?(?:your\s*)?ICICI Bank (Credit Card|Debit Card|Prepaid Card|Card|Account|Acct)\s*(\w+)?\s+(?:has been|was)?\s*(?:debited|spent)(?: for| by| of)?\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+on\s+([\d]{1,2}-[\w]{3}-[\d]{2,4})(?:\s+(?:at|to|towards)\s+([^.;]+?))?(?:\.\s*Info-?\s*([^.]+?))?(?:\.|$)/i;
+      m = text.match(re);
+      if (m) {
+        const inst = m[1] ? m[1].trim() : 'Card';
+        const isAcct = /Account|Acct/i.test(inst);
+        return {
+          bank: 'ICICI Bank',
+          instrument: isAcct ? 'Account' : inst,
+          account: isAcct ? cleanDigits(m[2]) : null,
+          last4: !isAcct ? cleanDigits(m[2]) : null,
+          amount: parseFloat(m[3].replace(/,/g, '')),
+          currency: 'INR',
+          merchant: (m[5] || m[6]) ? (m[5] || m[6]).trim() : null,
+          rawDate: m[4],
+          type: 'debit',
+          status: 'Approved',
+        };
+      }
+
       // Case 4: UPI incoming credit
       re = /Acct\s*(\w+)?\s*is credited with\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+on\s+([\d]{1,2}-[\w]{3}-[\d]{2,4})\s+from\s+(.+?)\.\s*UPI:?\s*(\d+)/i;
       m = text.match(re);

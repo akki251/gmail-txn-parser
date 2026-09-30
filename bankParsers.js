@@ -181,6 +181,23 @@ const BANK_PARSERS = [
           status: 'Approved',
         };
       }
+      // Case 3: Credit Card or Debit Card purchase
+      re =
+        /(?:A transaction of|purchase of|spent)\s+(?:INR|Rs\.?)\s*([\d,]+\.?\d*)\s+(?:has been made|done)?\s*(?:using|on)?\s*(?:your\s+)?ICICI Bank (Credit Card|Debit Card|Card)\s*(?:ending\s+in|ending|no\.?|linked to)?\s*(\w+)?\s+on\s+([\d]{1,2}-[\w]{3}-[\d]{2,4})(?:\s+at\s+([^.]+?))?(?:\.\s*Info:\s*([^.]+?))?(?:\.|$)/i;
+      m = text.match(re);
+      if (m) {
+        return {
+          bank: 'ICICI Bank',
+          instrument: m[2] ? m[2].trim() : 'Credit Card',
+          last4: cleanDigits(m[3]),
+          amount: parseFloat(m[1].replace(/,/g, '')),
+          currency: 'INR',
+          merchant: (m[5] || m[6]) ? (m[5] || m[6]).trim() : null,
+          rawDate: m[4],
+          type: 'debit',
+          status: 'Approved',
+        };
+      }
       return null;
     },
   },
