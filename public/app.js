@@ -247,12 +247,13 @@ function generateInsights(txns = [], activeCtx) {
 // ---- Data Loader & Render Cycle ----
 async function loadAllData() {
   try {
-    const [txns, categories, friends, ledgerData, cardOpt] = await Promise.all([
+    const [txns, categories, friends, ledgerData, cardOpt, obligationsData] = await Promise.all([
       api('/transactions'),
       api('/categories').catch(() => []),
       api('/friends').catch(() => []),
       api('/ledger').catch(() => ({})),
       api('/cards').catch(() => null),
+      api('/obligations').catch(() => null),
     ]);
 
     allTransactions = Array.isArray(txns)
@@ -267,6 +268,7 @@ async function loadAllData() {
     allFriends = Array.isArray(friends) ? friends : [];
     window._ledger = ledgerData || {};
     if (cardOpt) cardOptimizerData = cardOpt;
+    if (obligationsData) allObligationsData = obligationsData;
 
     hideLogin();
     renderApp();
@@ -282,6 +284,12 @@ function renderApp() {
   renderLedger();
   renderInsights();
   renderCardOptimizer();
+  if (allObligationsData) {
+    renderObligationsOverview(allObligationsData);
+    renderObligationsTable(allObligationsData);
+    renderObligationsCalendar(allObligationsData);
+    updateDashboardObligationsBanner(allObligationsData);
+  }
 }
 
 // ---- 1. RENDER DASHBOARD (Exact Android Replica) ----
@@ -1290,6 +1298,417 @@ async function saveCardEdit() {
 window.openCardEditModal = openCardEditModal;
 window.selectCalendarDay = selectCalendarDay;
 
+// ==========================================================================
+// 8. RECURRING FINANCIAL OBLIGATIONS & CALENDAR CONTROLLER
+// ==========================================================================
+
+let allObligationsData = null;
+let activeObCategoryFilter = 'All';
+let activeObStatusFilter = 'All';
+let currentObSimDate = null;
+
+async function fetchAndRenderObligations(date = currentObSimDate) {
+  try {
+    let url = '/obligations';
+    if (date) {
+      const dStr = typeof date === 'string' ? date : date.toISOString().split('T')[0];
+      url += `?date=${encodeURIComponent(dStr)}`;
+    }
+    const data = await api(url);
+    allObligationsData = data;
+
+    renderObligationsOverview(data);
+    renderObligationsTable(data);
+    renderObligationsCalendar(data);
+    updateDashboardObligationsBanner(data);
+  } catch (err) {
+    console.error('Failed to load obligations:', err);
+  }
+}
+
+function updateDashboardObligationsBanner(data) {
+  const titleEl = document.getElementById('dashObBannerTitle');
+  const subEl = document.getElementById('dashObBannerSub');
+  if (!titleEl || !data || !data.summary) return;
+
+  const summary = data.summary;
+  const next7 = data.upcoming ? data.upcoming.next7Days : [];
+  const next30 = data.upcoming ? data.upcoming.next30Days : [];
+
+  if (next7.length > 0) {
+    const first = next7[0];
+    titleEl.textContent = `₹${money(summary.next7DaysTotal)} due within 7 days (${next7.length} payment${next7.length > 1 ? 's' : ''})`;
+    subEl.textContent = `Next: ${first.merchant} (₹${money(first.amount)}) • ${first.source}`;
+  } else if (next30.length > 0) {
+    const first = next30[0];
+    titleEl.textContent = `Next: ${first.merchant} (₹${money(first.amount)})`;
+    subEl.textContent = `Next 30d total: ₹${money(summary.next30DaysTotal)} across ${summary.next30DaysCount} obligations`;
+  } else {
+    titleEl.textContent = `All commitments tracked`;
+    subEl.textContent = `${summary.totalActiveObligations} obligations • ₹${money(summary.monthlyCommittedRunrate)}/mo run-rate`;
+  }
+}
+
+function renderObligationsOverview(data) {
+  if (!data || !data.summary) return;
+  const { summary, upcoming } = data;
+
+  // KPI Metrics
+  const kpi7 = document.getElementById('obKpi7Days');
+  const kpi7Sub = document.getElementById('obKpi7DaysSub');
+  if (kpi7) kpi7.textContent = money(summary.next7DaysTotal);
+  if (kpi7Sub) kpi7Sub.textContent = `${summary.next7DaysCount} payment${summary.next7DaysCount === 1 ? '' : 's'} due soon`;
+
+  const kpi30 = document.getElementById('obKpi30Days');
+  const kpi30Sub = document.getElementById('obKpi30DaysSub');
+  if (kpi30) kpi30.textContent = money(summary.next30DaysTotal);
+  if (kpi30Sub) kpi30Sub.textContent = `${summary.next30DaysCount} commitment${summary.next30DaysCount === 1 ? '' : 's'} within 30 days`;
+
+  const kpiRun = document.getElementById('obKpiMonthlyRunrate');
+  const kpiRunSub = document.getElementById('obKpiRunrateSub');
+  if (kpiRun) kpiRun.textContent = `${money(summary.monthlyCommittedRunrate)}/mo`;
+  if (kpiRunSub) kpiRunSub.textContent = `Fixed: ${summary.fixedCount} · Variable: ${summary.variableCount}`;
+
+  // Cash Readiness Alert Banner
+  const urgentBanner = document.getElementById('obUrgentBanner');
+  const urgentTitle = document.getElementById('obUrgentTitle');
+  const urgentDesc = document.getElementById('obUrgentDesc');
+
+  if (urgentTitle && urgentDesc) {
+    if (upcoming.next7Days && upcoming.next7Days.length > 0) {
+      const first = upcoming.next7Days[0];
+      const d = new Date(first.expectedDate);
+      const dateFmt = d.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+      urgentTitle.textContent = `₹${money(summary.next7DaysTotal)} required in the next 7 days`;
+      urgentDesc.textContent = `Immediate: ${first.merchant} (${money(first.amount)}) due on ${dateFmt}. Ensure sufficient balance is maintained in ${first.accountInfo || 'your account'} to prevent auto-debit failure.`;
+      if (urgentBanner) urgentBanner.style.display = 'flex';
+    } else if (upcoming.next30Days && upcoming.next30Days.length > 0) {
+      const first = upcoming.next30Days[0];
+      const d = new Date(first.expectedDate);
+      const dateFmt = d.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+      urgentTitle.textContent = `Next upcoming: ${first.merchant} on ${dateFmt}`;
+      urgentDesc.textContent = `Total 30-day outflow: ₹${money(summary.next30DaysTotal)} across ${summary.next30DaysCount} commitments (${summary.confirmedCount} confirmed, ${summary.predictedCount} predicted).`;
+      if (urgentBanner) urgentBanner.style.display = 'flex';
+    } else {
+      urgentTitle.textContent = `All upcoming obligations are clear`;
+      urgentDesc.textContent = `No scheduled debits or bills detected in the upcoming 30 days.`;
+    }
+  }
+
+  // Count badge
+  const countBadge = document.getElementById('obCountBadge');
+  if (countBadge) countBadge.textContent = `${summary.totalActiveObligations} TOTAL`;
+
+  // Sim Date Picker
+  const dateInput = document.getElementById('obSimDate');
+  if (dateInput && data.asOfDate) {
+    dateInput.value = data.asOfDate.split('T')[0];
+  }
+}
+
+function renderObligationsTable(data) {
+  const tbody = document.getElementById('obTableBody');
+  if (!tbody || !data || !data.allObligations) return;
+
+  let list = data.allObligations;
+
+  // Filter by category
+  if (activeObCategoryFilter !== 'All') {
+    list = list.filter(o => o.category === activeObCategoryFilter);
+  }
+
+  // Filter by status
+  if (activeObStatusFilter !== 'All') {
+    list = list.filter(o => o.status === activeObStatusFilter);
+  }
+
+  if (list.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" style="text-align: center; padding: 32px 16px; color: var(--text-secondary);">
+          No obligations match the selected filters.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = list.map(ob => {
+    const d = new Date(ob.expectedDate);
+    const dateFormatted = d.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+
+    let catClass = 'ob-cat-subscription';
+    if (ob.category === 'SIP') catClass = 'ob-cat-sip';
+    else if (ob.category === 'Insurance') catClass = 'ob-cat-insurance';
+    else if (ob.category === 'Utility') catClass = 'ob-cat-utility';
+
+    // Countdown tag
+    let countdownBadge = '';
+    if (ob.daysRemaining <= 3) {
+      countdownBadge = `<span class="ob-due-countdown ob-countdown-urgent">In ${ob.daysRemaining === 0 ? 'today' : `${ob.daysRemaining}d`}</span>`;
+    } else if (ob.daysRemaining <= 7) {
+      countdownBadge = `<span class="ob-due-countdown ob-countdown-soon">In ${ob.daysRemaining} days</span>`;
+    } else {
+      countdownBadge = `<span class="ob-due-countdown ob-countdown-normal">In ${ob.daysRemaining} days</span>`;
+    }
+
+    // Amount change indicator
+    let amtChangeMarkup = '';
+    if (ob.amountChanged) {
+      const isUp = ob.amountDiff > 0;
+      amtChangeMarkup = `<span class="ob-amt-change" style="color: ${isUp ? '#DC2626' : '#16A34A'};">
+        ${isUp ? '↑' : '↓'} ₹${money(Math.abs(ob.amountDiff))} (was ₹${money(ob.previousAmount)})
+      </span>`;
+    }
+
+    // Fixed vs Variable
+    const fixedPill = `<span style="font-size: 10px; color: var(--text-muted); font-weight: 600;">${ob.isFixed ? 'Fixed' : 'Variable'}</span>`;
+
+    // Status Badge
+    const statusMarkup = ob.status === 'confirmed'
+      ? `<span class="ob-status-badge ob-status-confirmed">✓ Confirmed</span>`
+      : `<span class="ob-status-badge ob-status-predicted">✦ Predicted</span>`;
+
+    // Confidence Dot
+    const confClass = ob.confidence === 'High' ? 'high' : 'med';
+    const confMarkup = `
+      <div class="ob-conf-tag">
+        <span class="ob-conf-dot ${confClass}"></span>
+        <span>${escapeHtml(ob.confidence)}</span>
+      </div>
+    `;
+
+    return `
+      <tr>
+        <td>
+          <div style="font-weight: 700; color: var(--text-primary); font-size: 14px;">${escapeHtml(ob.merchant)}</div>
+          <div style="display: flex; align-items: center; gap: 6px; margin-top: 2px;">
+            <span class="ob-cat-badge ${catClass}">${escapeHtml(ob.category)}</span>
+            ${statusMarkup}
+          </div>
+          ${ob.policyOrRef ? `<div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">Ref: ${escapeHtml(ob.policyOrRef)}</div>` : ''}
+        </td>
+        <td style="text-align: right;">
+          <div style="font-weight: 800; font-size: 15px; font-feature-settings: 'tnum';">₹${moneyPrecise(ob.amount)}</div>
+          ${amtChangeMarkup}
+          ${fixedPill}
+        </td>
+        <td>
+          <span style="font-weight: 600; color: var(--text-primary);">${escapeHtml(ob.frequency)}</span>
+        </td>
+        <td>
+          <div style="font-weight: 600; color: var(--text-primary);">${dateFormatted}</div>
+          ${countdownBadge}
+        </td>
+        <td>
+          <span class="ob-source-pill">${escapeHtml(ob.source)}</span>
+          <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">${escapeHtml(ob.accountInfo || '')}</div>
+        </td>
+        <td>
+          ${confMarkup}
+        </td>
+        <td style="text-align: right;">
+          <div style="display: flex; gap: 6px; justify-content: flex-end;">
+            <button class="btn btn-secondary-pill" style="padding: 4px 8px; font-size: 11px;" onclick="openObligationOverrideModal('${escapeHtml(ob.id)}')">Edit</button>
+            <button class="btn btn-secondary-pill" style="padding: 4px 8px; font-size: 11px; background: #DCFCE7; color: #166534;" onclick="quickMarkObligationPaid('${escapeHtml(ob.id)}')">Paid</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderObligationsCalendar(data) {
+  const grid = document.getElementById('obCalendarGrid');
+  const monthLabel = document.getElementById('obCalMonthLabel');
+  if (!grid || !data || !data.calendar) return;
+
+  if (monthLabel) {
+    monthLabel.textContent = `${(data.monthName || '').toUpperCase()} ${data.year} SCHEDULE`;
+  }
+
+  const calendarDays = data.calendar;
+  if (calendarDays.length === 0) return;
+
+  // Compute blank leading padding days based on 1st of month's day of week
+  const firstDate = new Date(data.year, new Date(data.asOfDate).getMonth(), 1);
+  const startDayOfWeek = firstDate.getDay();
+
+  let html = '';
+  for (let i = 0; i < startDayOfWeek; i++) {
+    html += `<div class="calendar-day-cell cal-blank"></div>`;
+  }
+
+  calendarDays.forEach(cell => {
+    let classes = 'calendar-day-cell';
+    if (cell.isToday) classes += ' cal-today';
+    if (cell.hasObligation) classes += ' cal-has-event';
+
+    let obPills = '';
+    if (cell.obligations && cell.obligations.length > 0) {
+      obPills = cell.obligations.map(o => {
+        let pClass = 'cal-ob-sub';
+        if (o.category === 'SIP') pClass = 'cal-ob-sip';
+        else if (o.category === 'Insurance') pClass = 'cal-ob-insurance';
+        else if (o.category === 'Utility') pClass = 'cal-ob-util';
+
+        return `<span class="cal-ob-pill ${pClass}" title="${escapeHtml(o.merchant)}: ₹${money(o.amount)}">${escapeHtml(o.merchant.split(' ')[0])} ₹${money(o.amount)}</span>`;
+      }).join('');
+    }
+
+    html += `
+      <div class="${classes}" onclick="selectObligationCalendarDay(${cell.day})">
+        <div class="cal-day-num">${cell.day}</div>
+        ${obPills}
+        ${cell.hasObligation ? `<div style="font-size: 8px; font-weight: 800; color: var(--text-primary); margin-top: 2px;">Total: ₹${money(cell.totalAmount)}</div>` : ''}
+      </div>
+    `;
+  });
+
+  grid.innerHTML = html;
+}
+
+function selectObligationCalendarDay(dayNum) {
+  if (!allObligationsData || !allObligationsData.calendar) return;
+  const day = allObligationsData.calendar.find(d => d.day === dayNum);
+  if (!day || !day.hasObligation) {
+    showToast(`No obligations due on day ${dayNum}.`);
+    return;
+  }
+  const names = day.obligations.map(o => `${o.merchant} (₹${money(o.amount)})`).join(', ');
+  showToast(`Day ${dayNum}: ${names} (Total ₹${money(day.totalAmount)})`);
+}
+
+function openObligationNoticeModal() {
+  const modal = document.getElementById('obNoticeModalOverlay');
+  if (modal) {
+    document.getElementById('obNoticeText').value = '';
+    document.getElementById('obNoticeMerchant').value = '';
+    document.getElementById('obNoticeCategory').value = '';
+    modal.classList.add('active');
+  }
+}
+
+function closeObligationNoticeModal() {
+  const modal = document.getElementById('obNoticeModalOverlay');
+  if (modal) modal.classList.remove('active');
+}
+
+async function submitObligationNotice() {
+  const text = document.getElementById('obNoticeText').value.trim();
+  const merchant = document.getElementById('obNoticeMerchant').value.trim();
+  const category = document.getElementById('obNoticeCategory').value;
+
+  if (!text && !merchant) {
+    alert('Please enter an email subject/snippet or a provider name.');
+    return;
+  }
+
+  try {
+    await api('/obligations/notice', {
+      method: 'POST',
+      body: JSON.stringify({
+        subject: text,
+        body: text,
+        merchant: merchant || undefined,
+        category: category || undefined,
+        date: new Date().toISOString(),
+      }),
+    });
+    closeObligationNoticeModal();
+    showToast('Notice ingested and fused with obligations!');
+    await fetchAndRenderObligations(currentObSimDate);
+  } catch (err) {
+    alert(`Failed to ingest notice: ${err.message}`);
+  }
+}
+
+function openObligationOverrideModal(obligationId) {
+  if (!allObligationsData || !allObligationsData.allObligations) return;
+  const ob = allObligationsData.allObligations.find(o => o.id === obligationId);
+  if (!ob) return;
+
+  const modal = document.getElementById('obOverrideModalOverlay');
+  if (!modal) return;
+
+  document.getElementById('obOverrideId').value = ob.id;
+  document.getElementById('obOverrideTitle').textContent = `Edit ${ob.merchant}`;
+  document.getElementById('obOverrideAmount').value = ob.amount;
+  document.getElementById('obOverrideDate').value = ob.expectedDate ? ob.expectedDate.split('T')[0] : '';
+  document.getElementById('obOverrideFreq').value = ob.frequency || 'Monthly';
+
+  modal.classList.add('active');
+}
+
+function closeObligationOverrideModal() {
+  const modal = document.getElementById('obOverrideModalOverlay');
+  if (modal) modal.classList.remove('active');
+}
+
+async function saveObligationOverride() {
+  const obligationId = document.getElementById('obOverrideId').value;
+  const amount = Number(document.getElementById('obOverrideAmount').value);
+  const expectedDate = document.getElementById('obOverrideDate').value;
+  const frequency = document.getElementById('obOverrideFreq').value;
+
+  if (!obligationId || isNaN(amount) || amount <= 0 || !expectedDate) {
+    alert('Please enter a valid amount and expected due date.');
+    return;
+  }
+
+  try {
+    await api('/obligations/override', {
+      method: 'POST',
+      body: JSON.stringify({
+        obligationId,
+        amount,
+        expectedDate: new Date(expectedDate).toISOString(),
+        frequency,
+        isConfirmed: true,
+      }),
+    });
+    closeObligationOverrideModal();
+    showToast('Obligation updated successfully!');
+    await fetchAndRenderObligations(currentObSimDate);
+  } catch (err) {
+    alert(`Failed to save: ${err.message}`);
+  }
+}
+
+async function quickMarkObligationPaid(obligationId) {
+  if (!allObligationsData || !allObligationsData.allObligations) return;
+  const ob = allObligationsData.allObligations.find(o => o.id === obligationId);
+  if (!ob) return;
+
+  // Advance to next cycle
+  const currentExpected = new Date(ob.expectedDate);
+  let nextExpected = new Date(currentExpected);
+  if (ob.frequency === 'Monthly') nextExpected.setMonth(nextExpected.getMonth() + 1);
+  else if (ob.frequency === 'Semi-Monthly') nextExpected.setDate(nextExpected.getDate() + 15);
+  else if (ob.frequency === 'Annual') nextExpected.setFullYear(nextExpected.getFullYear() + 1);
+  else nextExpected.setMonth(nextExpected.getMonth() + 1);
+
+  try {
+    await api('/obligations/override', {
+      method: 'POST',
+      body: JSON.stringify({
+        obligationId,
+        isPaidThisCycle: true,
+        lastPaymentDate: new Date().toISOString(),
+        expectedDate: nextExpected.toISOString(),
+      }),
+    });
+    showToast(`Marked ${ob.merchant} as paid! Next due: ${nextExpected.toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}`);
+    await fetchAndRenderObligations(currentObSimDate);
+  } catch (err) {
+    alert(`Failed to mark paid: ${err.message}`);
+  }
+}
+
+window.openObligationOverrideModal = openObligationOverrideModal;
+window.quickMarkObligationPaid = quickMarkObligationPaid;
+window.selectObligationCalendarDay = selectObligationCalendarDay;
+
 // ---- TAB SWITCHING ----
 function switchTab(tabId) {
   activeTab = tabId;
@@ -1307,6 +1726,7 @@ function switchTab(tabId) {
     dashboard: 'dashboardView',
     transactions: 'transactionsView',
     cards: 'cardsView',
+    obligations: 'obligationsView',
     splitter: 'splitterView',
     ledger: 'ledgerView',
     insights: 'insightsView',
@@ -1327,6 +1747,8 @@ function switchTab(tabId) {
 
   if (tabId === 'cards') {
     fetchAndRenderCardOptimizer(currentSimDate);
+  } else if (tabId === 'obligations') {
+    fetchAndRenderObligations(currentObSimDate);
   }
 }
 
@@ -1500,6 +1922,64 @@ function init() {
   });
   document.getElementById('cardEditModalOverlay')?.addEventListener('click', (e) => {
     if (e.target.id === 'cardEditModalOverlay') closeCardEditModal();
+  });
+
+  // Obligations Banner on Dashboard
+  document.getElementById('dashObligationsBanner')?.addEventListener('click', () => {
+    switchTab('obligations');
+  });
+
+  // Obligations Simulation Controls
+  document.getElementById('obSimDate')?.addEventListener('change', (e) => {
+    if (e.target.value) {
+      currentObSimDate = new Date(e.target.value);
+      fetchAndRenderObligations(currentObSimDate);
+    }
+  });
+
+  document.getElementById('obSimTodayBtn')?.addEventListener('click', () => {
+    currentObSimDate = new Date();
+    fetchAndRenderObligations(currentObSimDate);
+  });
+
+  document.getElementById('obAddNoticeBtn')?.addEventListener('click', openObligationNoticeModal);
+  document.getElementById('obNoticeCancelBtn')?.addEventListener('click', closeObligationNoticeModal);
+  document.getElementById('obNoticeSubmitBtn')?.addEventListener('click', submitObligationNotice);
+  document.getElementById('obNoticeModalOverlay')?.addEventListener('click', (e) => {
+    if (e.target.id === 'obNoticeModalOverlay') closeObligationNoticeModal();
+  });
+
+  document.getElementById('obOverrideCancelBtn')?.addEventListener('click', closeObligationOverrideModal);
+  document.getElementById('obOverrideSaveBtn')?.addEventListener('click', saveObligationOverride);
+  document.getElementById('obOverrideMarkPaidBtn')?.addEventListener('click', () => {
+    const obId = document.getElementById('obOverrideId').value;
+    if (obId) {
+      closeObligationOverrideModal();
+      quickMarkObligationPaid(obId);
+    }
+  });
+  document.getElementById('obOverrideModalOverlay')?.addEventListener('click', (e) => {
+    if (e.target.id === 'obOverrideModalOverlay') closeObligationOverrideModal();
+  });
+
+  // Category filter chips
+  document.querySelectorAll('#obCategoryFilters .filter-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('#obCategoryFilters .filter-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      activeObCategoryFilter = chip.dataset.obCat;
+      if (allObligationsData) renderObligationsTable(allObligationsData);
+    });
+  });
+
+  // Status filter chips
+  document.querySelectorAll('#obStatusFilters .filter-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('#obStatusFilters .filter-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      activeObStatusFilter = chip.dataset.obStatus;
+      if (allObligationsData) renderObligationsTable(allObligationsData);
+    });
   });
 
   // Load data immediately

@@ -1464,4 +1464,297 @@ body {
   color: var(--text-primary);
 }
 
+/* ==========================================================================
+   Financial Obligations & Calendar Styles
+   ========================================================================== */
+
+/* Urgent Cash Buffer Banner */
+.ob-urgent-banner {
+  background: #FEF3C7;
+  border: 1px solid #FDE68A;
+  border-left: 4px solid #D97706;
+  padding: 14px 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: var(--space-md);
+  border-radius: var(--radius-md);
+}
+
+.ob-urgent-icon {
+  font-size: 22px;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.ob-urgent-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.ob-urgent-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #92400E;
+  margin-top: 2px;
+}
+
+.ob-urgent-desc {
+  font-size: 12px;
+  color: #78350F;
+  margin-top: 3px;
+  line-height: 1.4;
+}
+
+/* KPI Summary Grid */
+.ob-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: var(--space-md);
+}
+
+.ob-kpi-card {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border: 1px solid var(--border-light);
+}
+
+.ob-kpi-val {
+  font-size: 20px;
+  font-weight: 800;
+  font-feature-settings: 'tnum';
+  color: var(--text-primary);
+  margin-top: 4px;
+}
+
+.ob-kpi-sub {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 3px;
+}
+
+/* Filters */
+.ob-filters-wrap {
+  margin-top: var(--space-lg);
+}
+
+.filter-pill-scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+
+.filter-pill-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.filter-chip {
+  padding: 6px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.filter-chip:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.filter-chip.active {
+  background: var(--text-primary);
+  color: var(--white);
+  border-color: var(--text-primary);
+}
+
+/* Obligations Table */
+.ob-table-card {
+  padding: 0;
+  overflow: hidden;
+  margin-top: var(--space-sm);
+  border: 1px solid var(--border);
+}
+
+.ob-table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ob-table {
+  width: 100%;
+  min-width: 680px;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+
+.ob-table th {
+  padding: 12px 14px;
+  background: var(--surface-subtle);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.ob-table td {
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--border-light);
+  vertical-align: middle;
+}
+
+.ob-table tr:last-child td {
+  border-bottom: none;
+}
+
+.ob-table tr:hover td {
+  background: rgba(240, 240, 236, 0.4);
+}
+
+/* Category Badges */
+.ob-cat-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 3px;
+}
+
+.ob-cat-sip { background: #E0E7FF; color: #3730A3; }
+.ob-cat-insurance { background: #D1FAE5; color: #065F46; }
+.ob-cat-subscription { background: #EDE9FE; color: #5B21B6; }
+.ob-cat-utility { background: #FEF3C7; color: #92400E; }
+
+/* Status Badges */
+.ob-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.ob-status-confirmed { background: #DCFCE7; color: #166534; }
+.ob-status-predicted { background: #F3E8FF; color: #6B21A8; }
+
+/* Source Pill */
+.ob-source-pill {
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--surface-hover);
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-light);
+  display: inline-block;
+  white-space: nowrap;
+}
+
+/* Confidence Meter */
+.ob-conf-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.ob-conf-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.ob-conf-dot.high { background: #10B981; }
+.ob-conf-dot.med { background: #F59E0B; }
+
+/* Days remaining badge */
+.ob-due-countdown {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-top: 2px;
+}
+
+.ob-countdown-urgent { background: #FEE2E2; color: #991B1B; }
+.ob-countdown-soon { background: #FEF3C7; color: #92400E; }
+.ob-countdown-normal { background: var(--surface-subtle); color: var(--text-secondary); }
+
+/* Amount Change Pill */
+.ob-amt-change {
+  font-size: 10px;
+  font-weight: 700;
+  color: #D94A5B;
+  display: block;
+  margin-top: 2px;
+}
+
+/* Calendar Dots */
+.ob-calendar-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-light);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.ob-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dot-sip { background: #3730A3; }
+.dot-insurance { background: #065F46; }
+.dot-sub { background: #7C3AED; }
+.dot-util { background: #D97706; }
+
+.cal-ob-pill {
+  font-size: 8px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  display: block;
+}
+
+.cal-ob-sip { background: #E0E7FF; color: #3730A3; }
+.cal-ob-insurance { background: #D1FAE5; color: #065F46; }
+.cal-ob-sub { background: #EDE9FE; color: #5B21B6; }
+.cal-ob-util { background: #FEF3C7; color: #92400E; }
+
+
 

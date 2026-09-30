@@ -460,6 +460,23 @@ async function handleApi(req, res, urlPath) {
       if (!updated) return sendJson(res, 404, { error: 'Card not found' });
       return sendJson(res, 200, { ok: true, card: updated });
     }
+    if (req.method === 'GET' && urlPath === '/api/obligations') {
+      const urlObj = new URL(req.url, 'http://localhost');
+      const dateParam = urlObj.searchParams.get('date');
+      const obligationsData = db.getObligations(dateParam ? new Date(dateParam) : new Date());
+      return sendJson(res, 200, obligationsData);
+    }
+    if (req.method === 'POST' && urlPath === '/api/obligations/override') {
+      const { obligationId, ...overrideData } = await readBody(req);
+      if (!obligationId) return sendJson(res, 400, { error: 'obligationId is required' });
+      const saved = db.updateObligationOverride(obligationId, overrideData);
+      return sendJson(res, 200, { ok: true, override: saved });
+    }
+    if (req.method === 'POST' && urlPath === '/api/obligations/notice') {
+      const noticePayload = await readBody(req);
+      const added = db.addEmailNotice(noticePayload);
+      return sendJson(res, 200, { ok: true, notice: added });
+    }
     if (req.method === 'POST' && urlPath === '/api/refresh') {
       return execFile('./fetch-all.sh', [], { cwd: __dirname, timeout: 60000 }, (err, stdout, stderr) => {
         const output = [stdout, stderr, err && !stderr ? err.message : ''].filter(Boolean).join('\n');

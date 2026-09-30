@@ -478,6 +478,109 @@ function getCardOptimizer(asOfDate) {
   return getOptimizerOverview(cards, txns, asOfDate);
 }
 
+// ---- Recurring Financial Obligations ----
+const {
+  getObligationsOverview,
+  parseObligationEmail,
+} = require('./obligationDetector');
+
+const DEFAULT_EMAIL_NOTICES = [
+  {
+    id: 'notice_hdfc_life_001',
+    merchant: 'HDFC Life Term Insurance',
+    category: 'Insurance',
+    amount: 18450,
+    dueDate: '2026-10-12T00:00:00.000Z',
+    frequency: 'Annual',
+    refNumber: 'POL-HL-982144',
+    isConfirmed: true,
+    source: 'Email',
+    confidence: 'High',
+    rawSubject: 'Renewal Notice: Your HDFC Life Click 2 Protect Term Insurance Policy No. POL-HL-982144 is due for renewal on 12-Oct-2026',
+    receivedAt: '2026-09-20T08:30:00.000Z',
+  },
+  {
+    id: 'notice_star_health_002',
+    merchant: 'Star Health Insurance',
+    category: 'Insurance',
+    amount: 24600,
+    dueDate: '2026-11-15T00:00:00.000Z',
+    frequency: 'Annual',
+    refNumber: 'SH-FAM-554129',
+    isConfirmed: true,
+    source: 'Email',
+    confidence: 'High',
+    rawSubject: 'Star Health Family Optima Policy Renewal Reminder - Due on 15 Nov 2026',
+    receivedAt: '2026-09-25T11:15:00.000Z',
+  },
+  {
+    id: 'notice_airtel_fiber_003',
+    merchant: 'Airtel Xstream Fiber',
+    category: 'Utility',
+    amount: 1179,
+    dueDate: '2026-10-06T00:00:00.000Z',
+    frequency: 'Monthly',
+    refNumber: 'DSL-080-49219',
+    isConfirmed: true,
+    source: 'Email',
+    confidence: 'High',
+    rawSubject: 'Airtel Broadband Bill generated: Amount Rs. 1,179.00 due by 06-Oct-2026',
+    receivedAt: '2026-09-22T04:20:00.000Z',
+  },
+];
+
+function getEmailNotices() {
+  const db = load();
+  if (!db.emailNotices || !Array.isArray(db.emailNotices) || db.emailNotices.length === 0) {
+    return DEFAULT_EMAIL_NOTICES;
+  }
+  return db.emailNotices;
+}
+
+function addEmailNotice(noticeData) {
+  const db = load();
+  if (!db.emailNotices || !Array.isArray(db.emailNotices)) {
+    db.emailNotices = JSON.parse(JSON.stringify(DEFAULT_EMAIL_NOTICES));
+  }
+  let parsed = noticeData;
+  if (noticeData.body || noticeData.subject) {
+    const ext = parseObligationEmail(noticeData);
+    if (ext) {
+      parsed = { ...ext, ...noticeData };
+    }
+  }
+  if (!parsed.id) {
+    parsed.id = 'notice_' + Date.now();
+  }
+  db.emailNotices.push(parsed);
+  save(db);
+  return parsed;
+}
+
+function getObligationOverrides() {
+  const db = load();
+  return db.obligationOverrides || {};
+}
+
+function updateObligationOverride(obligationId, overrideData) {
+  const db = load();
+  if (!db.obligationOverrides) db.obligationOverrides = {};
+  db.obligationOverrides[obligationId] = {
+    ...(db.obligationOverrides[obligationId] || {}),
+    ...overrideData,
+    updatedAt: new Date().toISOString(),
+  };
+  save(db);
+  return db.obligationOverrides[obligationId];
+}
+
+function getObligations(asOfDate) {
+  const txns = listAll();
+  const emailNotices = getEmailNotices();
+  const overrides = getObligationOverrides();
+  return getObligationsOverview(txns, emailNotices, overrides, asOfDate);
+}
+
 module.exports = {
   upsertTransaction,
   listAll,
@@ -496,6 +599,12 @@ module.exports = {
   getCards,
   updateCard,
   getCardOptimizer,
+  getEmailNotices,
+  addEmailNotice,
+  getObligationOverrides,
+  updateObligationOverride,
+  getObligations,
 };
+
 
 
