@@ -42,21 +42,41 @@ const BANK_PARSERS = [
     name: 'IndusInd Credit Card',
     matchSender: (sender, text) => senderMatches(sender, text, /indusind/i),
     parse: (text) => {
-      const re =
+      // Case 1: Purchase approved or declined
+      let re =
         /IndusInd Bank Credit Card ending (\d+)\s+for\s+INR\s+([\d,]+\.\d{2})\s+on\s+([\d-]{10}\s+[\d:]{5,8}\s*(?:am|pm))\s+at\s+(.+?)\s+is\s+(Approved|Declined)/i;
-      const m = text.match(re);
-      if (!m) return null;
-      return {
-        bank: 'IndusInd Bank',
-        instrument: 'Credit Card',
-        last4: cleanDigits(m[1]),
-        amount: parseFloat(m[2].replace(/,/g, '')),
-        currency: 'INR',
-        merchant: m[4].trim(),
-        status: m[5],
-        type: 'debit',
-        rawDate: m[3],
-      };
+      let m = text.match(re);
+      if (m) {
+        return {
+          bank: 'IndusInd Bank',
+          instrument: 'Credit Card',
+          last4: cleanDigits(m[1]),
+          amount: parseFloat(m[2].replace(/,/g, '')),
+          currency: 'INR',
+          merchant: m[4].trim(),
+          status: m[5],
+          type: 'debit',
+          rawDate: m[3],
+        };
+      }
+
+      // Case 2: Payment confirmation (credited to card)
+      re =
+        /Payment of\s+(?:INR|Rs\.?)\s*([\d,]+\.?\d*)\s+towards your IndusInd Bank Credit Card.*?(?:credited to your Credit Card account on\s+([\d/]+))/i;
+      m = text.match(re);
+      if (m) {
+        return {
+          bank: 'IndusInd Bank',
+          instrument: 'Credit Card',
+          amount: parseFloat(m[1].replace(/,/g, '')),
+          currency: 'INR',
+          merchant: 'Credit Card Payment',
+          status: 'Approved',
+          type: 'credit',
+          rawDate: m[2],
+        };
+      }
+      return null;
     },
   },
   {
@@ -64,7 +84,7 @@ const BANK_PARSERS = [
     matchSender: (sender, text) => senderMatches(sender, text, /sbicard|sbi/i),
     parse: (text) => {
       const re =
-        /Rs\.?\s?([\d,]+\.\d{2})\s+spent on your SBI Credit Card ending with (\d+)\s+at\s+(.+?)\s+on\s+([\d-]{8})\s+via\s+(\w+)(?:\s+\(Ref No\.?\s*([\d]+)\))?/i;
+        /Rs\.?\s?([\d,]+\.\d{2})\s+spent on your SBI Credit Card ending\s+(?:with\s+)?(\d+)\s+at\s+(.+?)\s+on\s+([\d/-]{8,10})(?:\s+via\s+(\w+))?(?:\s+\(Ref No\.?\s*([\d]+)\))?/i;
       const m = text.match(re);
       if (!m) return null;
       return {
@@ -75,7 +95,7 @@ const BANK_PARSERS = [
         currency: 'INR',
         merchant: m[3].trim(),
         rawDate: m[4],
-        paymentMode: m[5],
+        paymentMode: m[5] || null,
         refNo: m[6] || null,
         type: 'debit',
         status: 'Approved',

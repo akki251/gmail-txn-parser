@@ -17,7 +17,7 @@ const COMPLETED_TRANSACTION_RE =
   /\b(debited|credited|spent|paid|withdrawn|purchased|purchase of|sent|received|transferred|disbursed|successfully\s+(?:paid|debited|credited)|transaction\s+amount)\b/i;
 
 const NON_TRANSACTIONAL_RE =
-  /\b(OTP|one[- ]time password|logged in|login (has been |was )?enabled|password|verification code|pending payment request|payment request|requested you to pay|tap to pay|is pending|failed|declined|attempt.*could not be completed|cashback|is due on|due date|scheduled for auto-debit|offer|loan|avail|credit limit|limit increase|apply now|upcoming|activat(ed|ion))\b|\bbill\b.{0,60}?\b(is ready|is generated|generated)\b|\bstatement\b.{0,60}?\b(generated|is ready)\b/i;
+  /\b(OTP|one[- ]time password|logged in|login (has been |was )?enabled|password|verification code|pending payment request|payment request|requested you to pay|tap to pay|is pending|failed|declined|attempt.*could not be completed|cashback|is due on|due date|scheduled for auto-debit|offer|loan|avail|credit limit|limit increase|apply now|upcoming|activat(ed|ion)|KYC|eKYC|video KYC|Aadhaar|biometric|UPI PIN|iMobile|Apple Pay|usage & transaction limit|policy renewal|made operative|registration|service update|reward points|greencard points|points alert|missed call|delivered order|share this code|DoT Sanchar Saathi|TRAI DND|spam calls?|Welcome to your|Do not click links|unverified sources)\b|\bbill\b.{0,60}?\b(is ready|is generated|generated)\b|\bstatement\b.{0,60}?\b(generated|is ready)\b/i;
 
 const FUTURE_RE = /\b(will be debited|is due|due on|due date|scheduled for|will be credited)\b/i;
 const FAILED_RE = /\b(failed|declined|rejected|cancelled|cancel|not debited|no amount (was|has been) debited)\b/i;
@@ -34,7 +34,8 @@ function hasCompletedMoneyMovement(text) {
   // do not trigger false positive completion evidence.
   const withoutFutureOrNegated = text
     .replace(/\bwill\s+be\s+(?:debited|credited|paid|transferred)\b/gi, '')
-    .replace(/\b(?:not|never|could\s+not\s+be|no\s+amount\s+(?:was|has\s+been))\s+(?:debited|credited|paid|transferred)\b/gi, '');
+    .replace(/\b(?:not|never|could\s+not\s+be|no\s+amount\s+(?:was|has\s+been))\s+(?:debited|credited|paid|transferred)\b/gi, '')
+    .replace(/\b(?:communication|email|message|call|sms)\s+received\b/gi, '');
 
   return COMPLETED_TRANSACTION_RE.test(withoutFutureOrNegated);
 }

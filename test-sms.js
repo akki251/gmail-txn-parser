@@ -53,6 +53,46 @@ const fixtures = [
     text: 'Dear Customer, your ICICI Bank Credit Card XX3249 has been debited for INR 3,249.00 on 29-Sep-26 at AMAZON INDIA. Info: VPS*Amazon.',
   },
   {
+    label: 'ICICI — Card spend with spent using and on merchant',
+    sender: 'ICICIT-S',
+    text: 'INR 410.90 spent using ICICI Bank Card XX3006 on 10-Oct-26 on OAM INDUSTRIES . Avl Limit: INR 5,03,018.20. If not you, call 1800 2662/SMS BLOCK 3006 to 9215676766.',
+  },
+  {
+    label: 'ICICI — UPI debit with debited with and account credited',
+    sender: 'ICICIT-S',
+    text: 'ICICI Bank Acct XXX299 debited with INR 21221.00 on 01-Oct-26. Acct XXX873 credited.UPI:615150825648.Call 18002662 for dispute or SMS BLOCK 299 to 9215676766.',
+  },
+  {
+    label: 'SBI Card — spend with slash date',
+    sender: 'SBICRD-S',
+    text: 'Rs.2,707.00 spent on your SBI Credit Card ending 4937 at WESTSIDE on 09/10/26. Trxn. not done by you? Report at https://sbicard.com/Dispute',
+  },
+  {
+    label: 'Kotak Bank — transaction processed with txn ID',
+    sender: 'KOTAKB-S',
+    text: 'Your transaction for INR 2000.00 against txn ID 628014521096 has been processed successfully. -Kotak',
+  },
+  {
+    label: 'HDFC Bank — card payment credited',
+    sender: 'HDFCBK-S',
+    text: 'HDFC Bank Cardmember, Online Payment of Rs.25893 vide Ref# 274BAMAAAOWS15U was credited to your card ending 6558 On 01/OCT/2026_value Date 01/OCT/2026',
+  },
+  {
+    label: 'HDFC Bank — low balance charge',
+    sender: 'HDFCBK-S',
+    text: 'Low Balance Alert! Rs.415.22 +GST charged for low balance in your HDFC Bank A/c X6770. Balance as of AUG-26 Rs.4135.35 Maintain Rs.10000 to avoid charges',
+  },
+  {
+    label: 'Kotak KYC SMS — should be SKIPPED (known sender, not a transaction)',
+    sender: 'KOTAKB-S',
+    text: 'Congrats! Your KYC was successful. Explore your Kotak811 a/c, apply for cards, loans, etc:https://kotk.in/KOTAKB/H2PATz -Kotak',
+  },
+  {
+    label: 'Swiggy delivery PIN — should be IGNORED (not a bank sender)',
+    sender: 'SWIGGY-S',
+    text: 'PLEASE SHARE THIS CODE AFTER CHECKING ALL THE ITEMS IN THE DELIVERED ORDER : 7174. Swiggy Order 250585418129774 from Waah! Indore',
+  },
+  {
     label: 'Random personal text — should be IGNORED (not a bank sender)',
     sender: '+919876543210',
     text: 'Can I call you later?',

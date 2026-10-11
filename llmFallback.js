@@ -66,14 +66,14 @@ Output ONLY valid JSON matching this schema:
  * 1. Primary: Cerebras API (Fast inference)
  * 2. Fallback: OpenRouter API
  */
-async function callChatCompletion({ messages, responseFormat = { type: 'json_object' } }) {
+async function callChatCompletion({ messages, responseFormat = { type: 'json_object' }, maxTokens = 150 }) {
   const cerebrasKey = process.env.CEREBRAS_API_KEY;
   const openRouterKey = process.env.OPENROUTER_API_KEY;
 
   // 1. Try Cerebras as primary provider if configured
   if (cerebrasKey) {
     try {
-      const cerebrasModels = ['qwen-3.8-27b', 'gpt-oss-120b', 'gemma-4-31b'];
+      const cerebrasModels = ['qwen-3.8-27b', 'gpt-oss-120b'];
       for (const model of cerebrasModels) {
         try {
           const response = await fetch('https://api.cerebras.ai/v1/chat/completions', {
@@ -85,7 +85,7 @@ async function callChatCompletion({ messages, responseFormat = { type: 'json_obj
             body: JSON.stringify({
               model,
               messages,
-              max_tokens: 300,
+              max_tokens: maxTokens,
               response_format: responseFormat,
             }),
           });
@@ -114,33 +114,49 @@ async function callChatCompletion({ messages, responseFormat = { type: 'json_obj
     }
   }
 
-  // 2. Fallback to OpenRouter
+  // 2. Fallback to OpenRouter (prefer lightweight, high-reliability models that don't exhaust low credit budgets)
   if (!openRouterKey) {
     throw new Error('Both Cerebras and OpenRouter are unavailable (missing OPENROUTER_API_KEY).');
   }
 
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${openRouterKey}`,
-    },
-    body: JSON.stringify({
-      model: 'meta-llama/llama-3.3-70b-instruct',
-      messages,
-      max_tokens: 300,
-      response_format: responseFormat,
-    }),
-  });
+  const openRouterModels = ['meta-llama/llama-3.1-8b-instruct', 'meta-llama/llama-3.3-70b-instruct'];
+  let lastError = null;
 
-  const data = await response.json();
-  if (data.error) throw new Error(data.error.message || 'OpenRouter API error');
+  for (const model of openRouterModels) {
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${openRouterKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          max_tokens: model.includes('70b') ? 70 : maxTokens,
+          response_format: responseFormat,
+        }),
+      });
 
-  const text = data.choices?.[0]?.message?.content;
-  if (!text) throw new Error('No text response from OpenRouter model');
+      const data = await response.json();
+      if (data.error) {
+        lastError = new Error(data.error.message || 'OpenRouter API error');
+        console.warn(`[OpenRouter ${model}] failed:`, data.error.message);
+        continue;
+      }
 
-  const cleaned = text.replace(/```json|```/g, '').trim();
-  return JSON.parse(cleaned);
+      const text = data.choices?.[0]?.message?.content;
+      if (text) {
+        const cleaned = text.replace(/```json|```/g, '').trim();
+        return JSON.parse(cleaned);
+      }
+    } catch (err) {
+      lastError = err;
+      console.warn(`[OpenRouter ${model}] exception:`, err.message);
+    }
+  }
+
+  throw lastError || new Error('All LLM completion providers failed.');
 }
 
 async function llmFallbackExtract(rawText) {

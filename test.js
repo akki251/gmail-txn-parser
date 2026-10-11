@@ -77,6 +77,18 @@ const fixtures = [
     plaintextBody: 'Your Refund has been credited. Status: Your Refund has been...',
   },
   {
+    label: 'SBI Card — spend email without via and with slash date',
+    sender: 'onlinesbicard@sbicard.com',
+    plaintextBody:
+      'Transaction Alert from PhonePe SBI card SELECT BLACK SBI Having trouble viewing this e-mail? View this message in your browser Dear Cardholder, This is to inform you that, Rs.2,707.00 spent on your SBI Credit Card ending 4937 at WESTSIDE on 09/10/26. Trxn. not done by you? Report at https://sbicard.com/Dispute . If you have not authorized this transaction please contact the SBI Card helpline.',
+  },
+  {
+    label: 'IndusInd — credit card payment confirmation email',
+    sender: 'transactionalert@indusind.com',
+    plaintextBody:
+      'Payment Confirmation on your IndusInd Bank Credit Card IndusInd Bank   Thank you for your Payment of INR 480.00 towards your IndusInd Bank Credit Card. Your payment is credited to your Credit Card account on 01/10/2026.   This is an auto generated email, please do not reply to this email.',
+  },
+  {
     label: 'SBI Card OTP email — should be SKIPPED (known sender, not a transaction)',
     sender: 'onlinesbicard@sbicard.com',
     plaintextBody:

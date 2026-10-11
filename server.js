@@ -189,6 +189,12 @@ async function handleSmsIngest(req, res) {
 
   stats.recordEvent('smsProcessed');
 
+  // Guard against non-bank senders: must match a known bank parser sender or content
+  const matchedParser = SMS_PARSERS.find((p) => p.matchSender(sender, text));
+  if (!matchedParser) {
+    return sendJson(res, 200, { ok: true, stored: false, reason: 'not a known SMS sender' });
+  }
+
   const classification = classifyMessage(text);
   if (classification === Classification.NON_TRANSACTION) {
     stats.recordEvent('filteredNotTransaction');
@@ -225,7 +231,7 @@ async function handleSmsIngest(req, res) {
           stats.recordEvent('filteredNotTransaction');
           return;
         }
-        const resolved = { ...extracted, sourceParser: result?.sourceParser || 'SMS Ingest', needsLLMFallback: true };
+        const resolved = { ...extracted, sourceParser: result?.sourceParser || matchedParser.name, needsLLMFallback: true };
         const isNew = await db.upsertTransaction(id, resolved, isoDate);
         if (isNew) stats.recordEvent('transactionsProduced');
         else stats.recordEvent('transactionsDeduplicated');
@@ -235,9 +241,10 @@ async function handleSmsIngest(req, res) {
         try {
           await db.upsertTransaction(id, {
             needsReview: true,
-            sourceParser: 'SMS Ingest',
+            sourceParser: matchedParser.name,
             rawText: text,
             sender,
+            lastFailureReason: err.message,
           }, isoDate);
         } catch (dbErr) {
           console.error('[SMS Ingest needsReview DB Error]:', dbErr);
@@ -286,6 +293,7 @@ async function handleSmsIngest(req, res) {
             sourceParser: result.sourceParser,
             rawText: result.rawText,
             sender,
+            lastFailureReason: err.message,
           }, isoDate);
         } catch (dbErr) {
           console.error('[SMS Ingest needsReview DB Error]:', dbErr);

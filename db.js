@@ -3,6 +3,8 @@ const path = require('path');
 const { categorize, CATEGORIES } = require('./categorize');
 const { llmFallbackExtract, llmMatchTransactions } = require('./llmFallback');
 const { matchSource } = require('./matchingEngine');
+const { parseTransactionSms } = require('./smsParsers');
+const { parseTransactionEmail } = require('./bankParsers');
 const stats = require('./pipelineStats');
 
 const DB_PATH = path.join(__dirname, 'db.json');
@@ -238,7 +240,36 @@ async function retryNeedsReview(id) {
   if (!txn || !txn.needsReview) return false;
 
   try {
-    const extracted = await llmFallbackExtract(txn.rawText);
+    // 1. Try deterministic parser first (handles newly added regexes without LLM overhead)
+    let extracted = null;
+    const isEmail = !/\sSMS$/.test(txn.sourceParser || '') && txn.sourceParser !== 'SMS Ingest';
+    const parsed = isEmail
+      ? parseTransactionEmail({ sender: txn.sender, plaintextBody: txn.rawText })
+      : parseTransactionSms({ sender: txn.sender, text: txn.rawText });
+
+    if (parsed) {
+      if (parsed.notATransaction) {
+        db.transactions[id].needsReview = false;
+        db.transactions[id].notATransaction = true;
+        save(db);
+        return true;
+      }
+      if (!parsed.needsLLMFallback) {
+        extracted = parsed;
+      }
+    } else if (txn.sourceParser === 'SMS Ingest') {
+      // Unknown non-bank sender (marketing/spam forwarded by shortcut)
+      db.transactions[id].needsReview = false;
+      db.transactions[id].notATransaction = true;
+      save(db);
+      return true;
+    }
+
+    // 2. If deterministic parser did not resolve it, call LLM extraction
+    if (!extracted) {
+      extracted = await llmFallbackExtract(txn.rawText);
+    }
+
     if (extracted.notATransaction) {
       db.transactions[id].needsReview = false;
       db.transactions[id].notATransaction = true;

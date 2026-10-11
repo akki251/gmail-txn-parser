@@ -21,8 +21,8 @@ const SMS_PARSERS = [
     name: 'ICICI Bank SMS',
     matchSender: (sender, text) => /ICICI/i.test(sender || '') || /ICICI/i.test(text || ''),
     parse: (text) => {
-      // Case 1: UPI debit (e.g. "ICICI Bank Acct XX123 debited for Rs 230.33 on 19-Aug-26; Swiggy credited. UPI: 123456789012")
-      let re = /ICICI Bank (?:Acct|Account|A\/c)?\s*(\w+)?\s+(?:has been\s+)?debited(?: for| by)?\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+on\s+([\d]{1,2}-[\w]{3}-[\d]{2,4});?\s*(?:(.+?)\s+credited|(?:to|at)\s+([^.;]+))?\.?\s*(?:UPI:?\s*(\d+))?/i;
+      // Case 1: UPI debit (e.g. "ICICI Bank Acct XX123 debited for Rs 230.33 on 19-Aug-26; Swiggy credited. UPI: 123456789012" or "ICICI Bank Acct XXX299 debited with INR 21221.00 on 01-Oct-26. Acct XXX873 credited.UPI:615150825648.")
+      let re = /ICICI Bank (?:Acct|Account|A\/c)?\s*(\w+)?\s+(?:has been\s+)?debited(?: for| by| with)?\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+on\s+([\d]{1,2}-[\w]{3}-[\d]{2,4})[.;]?\s*(?:(?:Acct\s+(\w+)\s+credited|(.+?)\s+credited)|(?:to|at)\s+([^.;]+))?\.?\s*(?:UPI:?\s*(\d+))?/i;
       let m = text.match(re);
       if (m) {
         return {
@@ -31,17 +31,17 @@ const SMS_PARSERS = [
           account: cleanDigits(m[1]),
           amount: parseFloat(m[2].replace(/,/g, '')),
           currency: 'INR',
-          merchant: (m[4] || m[5]) ? (m[4] || m[5]).trim() : null,
+          merchant: m[4] ? ('Account ' + m[4]) : ((m[5] || m[6]) ? (m[5] || m[6]).trim() : null),
           rawDate: m[3],
           paymentMode: 'UPI',
-          refNo: cleanRefNo(m[6]),
+          refNo: cleanRefNo(m[7]),
           type: 'debit',
           status: 'Approved',
         };
       }
 
-      // Case 2: Card debit / Spent (e.g. "Rs 230.33 debited from ICICI Bank Credit Card XX1234 on 19-Aug-26. Info: Swiggy")
-      re = /(?:Rs\.?|INR)\s?([\d,]+\.?\d*)\s+(?:debited from|spent on)\s+ICICI Bank (Prepaid Card|Debit Card|Credit Card|Card|Account)\s*(\w+)?\s+on\s+([\d]{1,2}-\w{3}-\d{2,4})(?:\.\s*Info-?\s*([^.]+?)(?:\.|$))?/i;
+      // Case 2: Card debit / Spent (e.g. "Rs 230.33 debited from ICICI Bank Credit Card XX1234 on 19-Aug-26. Info: Swiggy" or "INR 410.90 spent using ICICI Bank Card XX3006 on 10-Oct-26 on OAM INDUSTRIES . Avl Limit: INR 5,03,018.20.")
+      re = /(?:Rs\.?|INR)\s?([\d,]+\.?\d*)\s+(?:debited from|spent on|spent using)\s+ICICI Bank (Prepaid Card|Debit Card|Credit Card|Card|Account)\s*(\w+)?\s+on\s+([\d]{1,2}-\w{3}-\d{2,4})(?:\s+(?:on|at)\s+([^.]+?)|(?:\.\s*Info-?\s*([^.]+?)))?(?:\.|\s+Avl|\s+Available|$)/i;
       m = text.match(re);
       if (m) {
         return {
@@ -50,7 +50,7 @@ const SMS_PARSERS = [
           last4: cleanDigits(m[3]),
           amount: parseFloat(m[1].replace(/,/g, '')),
           currency: 'INR',
-          merchant: m[5] ? m[5].trim() : null,
+          merchant: (m[5] || m[6]) ? (m[5] || m[6]).trim() : null,
           rawDate: m[4],
           type: 'debit',
           status: 'Approved',
@@ -208,6 +208,41 @@ const SMS_PARSERS = [
         };
       }
 
+      // Case 5: HDFC Card Payment Credited: "HDFC Bank Cardmember, Online Payment of Rs.25893 vide Ref# 274BAMAAAOWS15U was credited to your card ending 6558 On 01/OCT/2026_value Date 01/OCT/2026"
+      re = /Online Payment of\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)(?:\s+vide Ref#?\s*(\w+))?\s+was credited to your card ending\s+(\d+)\s+On\s+([^_]+)/i;
+      m = text.match(re);
+      if (m) {
+        return {
+          bank: 'HDFC Bank',
+          instrument: 'Credit Card',
+          last4: cleanDigits(m[3]),
+          amount: parseFloat(m[1].replace(/,/g, '')),
+          currency: 'INR',
+          merchant: 'Credit Card Payment',
+          rawDate: m[4].trim(),
+          type: 'credit',
+          status: 'Approved',
+          refNo: cleanRefNo(m[2]),
+        };
+      }
+
+      // Case 6: HDFC Low Balance Charge: "Low Balance Alert! Rs.415.22 +GST charged for low balance in your HDFC Bank A/c X6770. Balance as of AUG-26 Rs.4135.35 Maintain Rs.10000 to avoid charges"
+      re = /(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s*(?:\+GST)?\s+charged for low balance in your HDFC Bank A\/c\s+[X*]*(\w+)\.?\s*Balance as of\s+([A-Z]+-\d{2})/i;
+      m = text.match(re);
+      if (m) {
+        return {
+          bank: 'HDFC Bank',
+          instrument: 'Account',
+          account: cleanDigits(m[2]),
+          amount: parseFloat(m[1].replace(/,/g, '')),
+          currency: 'INR',
+          merchant: 'HDFC Low Balance Charge',
+          rawDate: m[3],
+          type: 'debit',
+          status: 'Approved',
+        };
+      }
+
       return null;
     },
   },
@@ -218,7 +253,7 @@ const SMS_PARSERS = [
     parse: (text) => {
       // SBI Card: "Rs. 510.90 spent on your SBI Credit Card ending 5678 at JioRecharge on 24-Jul-26."
       // SBI Card: "Rs.299.00 spent on your SBI Credit Card ending with 4937 at SelfKYCPrepaid on 18-08-26 via UPI (Ref No. 915221377196)."
-      const re = /(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+spent on your SBI Credit Card ending\s+(?:with\s+)?(\w+)\s+at\s+(.+?)\s+on\s+([\d]{1,2}-[\w]{2,3}-[\d]{2,4})/i;
+      const re = /(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+spent on your SBI Credit Card ending\s+(?:with\s+)?(\w+)\s+at\s+(.+?)\s+on\s+([\d]{1,2}[-/][\w]{2,3}[-/][\d]{2,4}|[\d]{1,2}[-/]\d{1,2}[-/][\d]{2,4})/i;
       const m = text.match(re);
       if (m) {
         const refMatch = text.match(/Ref(?:\s*No\.?)?\s*(\d{6,})/i);
@@ -316,6 +351,47 @@ const SMS_PARSERS = [
         type: 'debit',
         status: 'Approved',
       };
+    },
+  },
+  {
+    name: 'Kotak Bank SMS',
+    matchSender: (sender, text) => /KOTAK/i.test(sender || '') || /Kotak/i.test(text || ''),
+    parse: (text) => {
+      // Case 1: "Your transaction for INR 2000.00 against txn ID 628014521096 has been processed successfully. -Kotak"
+      let re = /(?:Your\s+)?transaction for\s+(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s+against\s+(?:txn|transaction)\s+ID\s*(\w+)\s+has been processed successfully/i;
+      let m = text.match(re);
+      if (m) {
+        return {
+          bank: 'Kotak Mahindra Bank',
+          instrument: 'Account',
+          amount: parseFloat(m[1].replace(/,/g, '')),
+          currency: 'INR',
+          merchant: null,
+          refNo: cleanRefNo(m[2]),
+          type: 'debit',
+          status: 'Approved',
+        };
+      }
+
+      // Case 2: Kotak debit/credit: "Kotak Bank A/c XX123 debited for Rs 500.00 on 10-Oct-26 at Swiggy"
+      re = /Kotak(?:811)?\s+(?:Bank\s+)?(?:A\/c|Account|Card)\s*(\w+)?\s+(?:has been\s+)?(debited|credited|spent)(?: for| with| of)?\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)(?:\s+on\s+([\d]{1,2}-[\w]{3}-[\d]{2,4}))?(?:\s+(?:at|to|by)\s+([^.]+?))?(?:\.|$)/i;
+      m = text.match(re);
+      if (m) {
+        const isCredit = /credited/i.test(m[2]);
+        return {
+          bank: 'Kotak Mahindra Bank',
+          instrument: 'Account',
+          account: cleanDigits(m[1]),
+          amount: parseFloat(m[3].replace(/,/g, '')),
+          currency: 'INR',
+          merchant: m[5] ? m[5].trim() : null,
+          rawDate: m[4] || null,
+          type: isCredit ? 'credit' : 'debit',
+          status: 'Approved',
+        };
+      }
+
+      return null;
     },
   },
 ];
