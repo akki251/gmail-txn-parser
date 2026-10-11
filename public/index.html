@@ -198,6 +198,48 @@
         <button class="pill-btn active" data-bank="all">All Banks</button>
       </div>
 
+      <!-- Date Range Filter -->
+      <div class="date-filter-container" id="dateFilterContainer">
+        <div class="pill-scroller date-presets-scroller" id="datePresetPills">
+          <button class="pill-btn active" data-preset="all">All Dates</button>
+          <button class="pill-btn" data-preset="thisMonth">This Month</button>
+          <button class="pill-btn" data-preset="last30">Last 30 Days</button>
+          <button class="pill-btn" data-preset="last90">Last 90 Days</button>
+          <button class="pill-btn" data-preset="thisYear">This Year</button>
+          <button class="pill-btn" data-preset="custom">Custom</button>
+        </div>
+
+        <div class="date-range-bar" id="dateRangeBar">
+          <div class="date-range-inputs">
+            <div class="date-input-field">
+              <label for="txnStartDate" class="date-label">From</label>
+              <div class="date-input-wrap">
+                <input type="date" id="txnStartDate" class="date-picker-input" />
+              </div>
+            </div>
+            <div class="date-range-sep">→</div>
+            <div class="date-input-field">
+              <label for="txnEndDate" class="date-label">To</label>
+              <div class="date-input-wrap">
+                <input type="date" id="txnEndDate" class="date-picker-input" />
+              </div>
+            </div>
+          </div>
+          <button type="button" id="clearDateRangeBtn" class="date-clear-action-btn" title="Clear date filter" style="display: none;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+            Clear
+          </button>
+        </div>
+
+        <div class="date-filter-summary" id="dateFilterSummary" style="display: none;">
+          <span class="summary-dot"></span>
+          <span id="dateFilterSummaryText">Filtered by date</span>
+        </div>
+      </div>
+
       <!-- Transaction List Grouped -->
       <div class="transaction-card" id="fullTxnList" style="margin-top: var(--space-md);">
         <!-- Injected dynamically -->

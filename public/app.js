@@ -505,10 +505,73 @@ function renderTxnRowHtml(t) {
 }
 
 // ---- 2. RENDER TRANSACTIONS SCREEN ----
+function setTxnDatePreset(presetKey) {
+  const startInput = document.getElementById('txnStartDate');
+  const endInput = document.getElementById('txnEndDate');
+  if (!startInput || !endInput) return;
+
+  const now = new Date();
+  const formatYMD = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  if (presetKey === 'all') {
+    startInput.value = '';
+    endInput.value = '';
+    startInput.removeAttribute('max');
+    endInput.removeAttribute('min');
+  } else if (presetKey === 'thisMonth') {
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    startInput.value = formatYMD(firstDay);
+    endInput.value = formatYMD(now);
+    startInput.max = endInput.value;
+    endInput.min = startInput.value;
+  } else if (presetKey === 'last30') {
+    const past = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    startInput.value = formatYMD(past);
+    endInput.value = formatYMD(now);
+    startInput.max = endInput.value;
+    endInput.min = startInput.value;
+  } else if (presetKey === 'last90') {
+    const past = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+    startInput.value = formatYMD(past);
+    endInput.value = formatYMD(now);
+    startInput.max = endInput.value;
+    endInput.min = startInput.value;
+  } else if (presetKey === 'thisYear') {
+    const firstDay = new Date(now.getFullYear(), 0, 1);
+    startInput.value = formatYMD(firstDay);
+    endInput.value = formatYMD(now);
+    startInput.max = endInput.value;
+    endInput.min = startInput.value;
+  } else if (presetKey === 'custom') {
+    startInput.focus();
+    updateTxnDatePresetPills('custom');
+    return;
+  }
+
+  updateTxnDatePresetPills(presetKey);
+  renderTransactions();
+}
+
+function updateTxnDatePresetPills(presetKey) {
+  document.querySelectorAll('#datePresetPills .pill-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.preset === presetKey);
+  });
+}
+
 function renderTransactions() {
   const query = (document.getElementById('txnSearchInput')?.value || '').toLowerCase().trim();
   const typeFilter = document.querySelector('#typeFilterPills .pill-btn.active')?.dataset.type || 'all';
   const bankFilter = document.querySelector('#bankFilterPills .pill-btn.active')?.dataset.bank || 'all';
+
+  const startDateVal = document.getElementById('txnStartDate')?.value || '';
+  const endDateVal = document.getElementById('txnEndDate')?.value || '';
+  const startDateBound = startDateVal ? new Date(`${startDateVal}T00:00:00`) : null;
+  const endDateBound = endDateVal ? new Date(`${endDateVal}T23:59:59.999`) : null;
 
   // Extract unique banks dynamically for filter pills
   const bankSet = new Set(allTransactions.map(t => t.bank).filter(Boolean));
@@ -544,8 +607,48 @@ function renderTransactions() {
 
     if (bankFilter !== 'all' && t.bank !== bankFilter) return false;
 
+    // Date range filter
+    if (startDateBound || endDateBound) {
+      const tDate = parseTxnDate(t);
+      if (!tDate || isNaN(tDate.getTime())) return false;
+      if (startDateBound && tDate < startDateBound) return false;
+      if (endDateBound && tDate > endDateBound) return false;
+    }
+
     return true;
   });
+
+  // Update date filter status UI (clear button and summary badge)
+  const clearBtn = document.getElementById('clearDateRangeBtn');
+  const summaryEl = document.getElementById('dateFilterSummary');
+  const summaryText = document.getElementById('dateFilterSummaryText');
+  const hasDateFilter = Boolean(startDateVal || endDateVal);
+
+  if (clearBtn) {
+    clearBtn.style.display = hasDateFilter ? 'inline-flex' : 'none';
+  }
+
+  if (summaryEl && summaryText) {
+    if (hasDateFilter) {
+      summaryEl.style.display = 'flex';
+      const opts = { day: 'numeric', month: 'short', year: 'numeric' };
+      let dateLabel = '';
+      if (startDateBound && endDateBound) {
+        if (startDateVal === endDateVal) {
+          dateLabel = startDateBound.toLocaleDateString('en-GB', opts);
+        } else {
+          dateLabel = `${startDateBound.toLocaleDateString('en-GB', opts)} – ${endDateBound.toLocaleDateString('en-GB', opts)}`;
+        }
+      } else if (startDateBound) {
+        dateLabel = `From ${startDateBound.toLocaleDateString('en-GB', opts)}`;
+      } else {
+        dateLabel = `Until ${endDateBound.toLocaleDateString('en-GB', opts)}`;
+      }
+      summaryText.textContent = `${dateLabel} • ${filtered.length} transaction${filtered.length === 1 ? '' : 's'}`;
+    } else {
+      summaryEl.style.display = 'none';
+    }
+  }
 
   const listEl = document.getElementById('fullTxnList');
   if (!listEl) return;
@@ -1798,6 +1901,49 @@ function init() {
       renderTransactions();
     });
   });
+
+  // Date preset pills
+  document.querySelectorAll('#datePresetPills .pill-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      setTxnDatePreset(btn.dataset.preset);
+    });
+  });
+
+  // Custom date range inputs
+  const txnStartInput = document.getElementById('txnStartDate');
+  const txnEndInput = document.getElementById('txnEndDate');
+  const clearDateRangeBtn = document.getElementById('clearDateRangeBtn');
+
+  function handleCustomDateInput() {
+    const s = txnStartInput?.value;
+    const e = txnEndInput?.value;
+    if (txnStartInput && txnEndInput) {
+      if (s) txnEndInput.min = s;
+      else txnEndInput.removeAttribute('min');
+      if (e) txnStartInput.max = e;
+      else txnStartInput.removeAttribute('max');
+    }
+    if (!s && !e) {
+      updateTxnDatePresetPills('all');
+    } else {
+      updateTxnDatePresetPills('custom');
+    }
+    renderTransactions();
+  }
+
+  if (txnStartInput) {
+    txnStartInput.addEventListener('change', handleCustomDateInput);
+    txnStartInput.addEventListener('input', handleCustomDateInput);
+  }
+  if (txnEndInput) {
+    txnEndInput.addEventListener('change', handleCustomDateInput);
+    txnEndInput.addEventListener('input', handleCustomDateInput);
+  }
+  if (clearDateRangeBtn) {
+    clearDateRangeBtn.addEventListener('click', () => {
+      setTxnDatePreset('all');
+    });
+  }
 
   // Add friend
   const addFriendBtn = document.getElementById('addFriendBtn');
