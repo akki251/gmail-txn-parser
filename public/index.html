@@ -682,8 +682,12 @@
           <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);" id="splitModalMerchant">Merchant</div>
         </div>
 
-        <div class="section-header" style="margin-top: var(--space-md);">
+        <div class="section-header" style="margin-top: var(--space-md); display: flex; justify-content: space-between; align-items: center;">
           <h2 class="heading-3">Select friends to split with</h2>
+          <div style="display: flex; gap: 6px;">
+            <button type="button" id="splitSelectAllBtn" class="pill-btn" style="padding: 3px 10px; font-size: 11px;">Select All</button>
+            <button type="button" id="splitClearAllBtn" class="pill-btn" style="padding: 3px 10px; font-size: 11px;">Clear</button>
+          </div>
         </div>
         <div class="input-row" style="margin-bottom: var(--space-sm);">
           <input type="text" id="splitAddFriendInput" class="app-input" placeholder="Add new friend name..." />

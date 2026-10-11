@@ -370,8 +370,12 @@ function splitTransaction(transactionId, friendNames, customShares) {
   const db = load();
   const txn = db.transactions[transactionId];
   if (!txn) throw new Error('Unknown transaction: ' + transactionId);
-  if (txn.splitStatus === 'split') throw new Error('Already split: ' + transactionId);
   if (txn.needsReview) throw new Error('This transaction needs review before it can be split: ' + transactionId);
+
+  // If already split, replace previous unsettled splits for this transaction to allow updating the split
+  if (txn.splitStatus === 'split') {
+    db.splits = db.splits.filter((s) => s.transactionId !== transactionId || s.settled);
+  }
 
   const friends = friendNames.map((name) => findOrCreateFriend(db, name));
 
@@ -404,6 +408,7 @@ function splitTransaction(transactionId, friendNames, customShares) {
   }
 
   db.transactions[transactionId].splitStatus = 'split';
+  db.transactions[transactionId].shares = shares;
   save(db);
   return shares;
 }

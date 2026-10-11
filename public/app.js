@@ -740,7 +740,17 @@ function openSplitModal(txnId) {
     return;
   }
   activeSplitTxn = txn;
-  modalSelectedFriends = new Set(allFriends.map(f => f.name));
+
+  // Don't auto-select all friends:
+  // If transaction already has recorded shares, pre-select those friends.
+  // Otherwise, start with none selected (or user's selected chips from friends management).
+  if (txn.shares && Object.keys(txn.shares).length > 0) {
+    modalSelectedFriends = new Set(Object.keys(txn.shares));
+  } else if (selectedFriendIds && selectedFriendIds.size > 0) {
+    modalSelectedFriends = new Set(selectedFriendIds);
+  } else {
+    modalSelectedFriends = new Set();
+  }
 
   const amountEl = document.getElementById('splitModalAmount');
   if (amountEl) amountEl.textContent = moneyPrecise(txn.amount);
@@ -813,6 +823,11 @@ async function confirmSplit() {
     alert('Please select at least one friend to split with.');
     return;
   }
+  const confirmBtn = document.getElementById('confirmSplitBtn');
+  if (confirmBtn) {
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Recording...';
+  }
   try {
     await api('/split', {
       method: 'POST',
@@ -824,7 +839,12 @@ async function confirmSplit() {
     await loadAllData();
     switchTab('ledger');
   } catch (err) {
-    alert(err.message);
+    alert(err.message || 'Failed to record split');
+  } finally {
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = 'Record to Ledger';
+    }
   }
 }
 
@@ -844,7 +864,13 @@ function renderLedger() {
   const ledgerWrap = document.getElementById('ledgerBalancesList');
   const totalOwedEl = document.getElementById('ledgerTotalOwed');
   const balances = window._ledger || {};
-  const names = Object.keys(balances);
+
+  // Include all friends so settled and current debts are both clearly visible
+  const allNamesSet = new Set([
+    ...allFriends.map(f => f.name).filter(Boolean),
+    ...Object.keys(balances)
+  ]);
+  const names = Array.from(allNamesSet);
 
   let totalOwed = 0;
   names.forEach(name => {
@@ -2046,6 +2072,18 @@ function init() {
   document.getElementById('cancelSplitBtn')?.addEventListener('click', closeSplitModal);
   document.getElementById('splitModalOverlay')?.addEventListener('click', (e) => {
     if (e.target.id === 'splitModalOverlay') closeSplitModal();
+  });
+
+  // Select all / Clear all friends in split modal
+  document.getElementById('splitSelectAllBtn')?.addEventListener('click', () => {
+    allFriends.forEach(f => modalSelectedFriends.add(f.name));
+    renderSplitModalFriends();
+    recalculateSplit();
+  });
+  document.getElementById('splitClearAllBtn')?.addEventListener('click', () => {
+    modalSelectedFriends.clear();
+    renderSplitModalFriends();
+    recalculateSplit();
   });
 
   const splitAddFriendBtn = document.getElementById('splitAddFriendBtn');
