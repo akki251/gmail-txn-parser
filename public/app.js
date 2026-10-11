@@ -837,7 +837,11 @@ async function confirmSplit() {
     const shareAmt = (activeSplitTxn.amount / (friends.length + 1)).toFixed(2);
     showToast(`Recorded in Ledger! Each friend owes ₹${shareAmt}`);
     await loadAllData();
-    switchTab('ledger');
+    if (activeTab === 'detail' && activeTxn && activeSplitTxn && String(activeTxn.id) === String(activeSplitTxn.id)) {
+      activeTxn = allTransactions.find(t => String(t.id) === String(activeSplitTxn.id)) || activeTxn;
+      const splitBtn = document.getElementById('detailSplitBtn');
+      if (splitBtn) splitBtn.textContent = 'Edit expense split';
+    }
   } catch (err) {
     alert(err.message || 'Failed to record split');
   } finally {
@@ -1078,6 +1082,7 @@ function openDetailSheet(txnId) {
   // Split button
   const splitBtn = document.getElementById('detailSplitBtn');
   if (splitBtn) {
+    splitBtn.textContent = txn.splitStatus === 'split' ? 'Edit expense split' : 'Split this expense with friends';
     splitBtn.onclick = () => {
       openSplitModal(txn.id);
     };
