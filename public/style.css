@@ -458,6 +458,45 @@ body {
   color: var(--primary-strong);
 }
 
+.detail-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  margin-bottom: var(--space-md);
+  box-shadow: var(--shadow-subtle);
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.detail-back-btn:hover {
+  background: var(--surface-hover);
+  color: var(--primary);
+  border-color: var(--primary);
+  transform: translateX(-2px);
+}
+
+.detail-back-btn:active {
+  transform: scale(0.97);
+}
+
+.detail-back-btn svg {
+  flex-shrink: 0;
+  stroke: currentColor;
+  transition: transform 0.15s ease;
+}
+
+.detail-back-btn:hover svg {
+  transform: translateX(-2px);
+}
+
 /* ---- Activity / Insight Card ---- */
 .insight-card {
   margin-top: 0;

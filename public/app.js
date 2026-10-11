@@ -4,9 +4,28 @@ let allTransactions = [];
 let allCategories = [];
 let allFriends = [];
 let activeTab = 'dashboard';
+let previousTab = 'transactions';
 let activeTxn = null;
 let selectedFriendIds = new Set();
 let isRawExpanded = false;
+
+// Per-view scroll offset tracking
+const viewScrollOffsets = {
+  transactions: 0,
+  dashboard: 0,
+  cards: 0,
+  obligations: 0,
+  splitter: 0,
+  ledger: 0,
+  insights: 0,
+};
+
+// Continuously record scroll position of the active view
+window.addEventListener('scroll', () => {
+  if (activeTab && activeTab !== 'detail' && viewScrollOffsets.hasOwnProperty(activeTab)) {
+    viewScrollOffsets[activeTab] = window.scrollY || document.documentElement.scrollTop || 0;
+  }
+}, { passive: true });
 
 // Avatar Palette (Exact replica of Android AvatarPalette)
 const AvatarPalette = [
@@ -923,8 +942,6 @@ function renderInsights() {
 }
 
 // ---- 6. DEDICATED TRANSACTION DETAIL SCREEN ----
-let previousTab = 'dashboard';
-
 function openDetailSheet(txnId) {
   const txn = allTransactions.find(t => String(t.id) === String(txnId));
   if (!txn) {
@@ -932,7 +949,21 @@ function openDetailSheet(txnId) {
     return;
   }
   activeTxn = txn;
-  previousTab = activeTab || 'dashboard';
+
+  // Capture current scroll offset of the active view before switching
+  const currentScroll = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+  if (activeTab && activeTab !== 'detail') {
+    viewScrollOffsets[activeTab] = currentScroll;
+    previousTab = activeTab;
+  } else if (!previousTab) {
+    previousTab = 'transactions';
+  }
+
+  // Update back button label dynamically
+  const backBtnLabel = document.getElementById('detailBackBtnLabel');
+  if (backBtnLabel) {
+    backBtnLabel.textContent = previousTab === 'dashboard' ? 'Back to Dashboard' : 'Back to all transactions';
+  }
 
   const isDebit = txn.type === 'debit';
   const palette = avatarColorFor(txn.merchant || txn.bank || 'Txn');
@@ -1040,7 +1071,7 @@ function openDetailSheet(txnId) {
         showToast('Transaction deleted');
         activeTxn = null;
         await loadAllData();
-        switchTab(previousTab || 'transactions');
+        switchTab(previousTab || 'transactions', true);
       } catch (err) {
         alert(err.message || 'Failed to delete transaction');
       } finally {
@@ -1090,6 +1121,15 @@ function openDetailSheet(txnId) {
     detailView.style.display = 'block';
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
+
+  activeTab = 'detail';
+
+  // Push history state so browser/gesture back also returns cleanly
+  try {
+    if (window.history && window.history.pushState) {
+      window.history.pushState({ view: 'detail', txnId: txn.id }, '', '#detail');
+    }
+  } catch (_) {}
 
   // Hide top segment nav while in dedicated detail view
   const topNav = document.getElementById('topNavBar');
@@ -1813,7 +1853,7 @@ window.quickMarkObligationPaid = quickMarkObligationPaid;
 window.selectObligationCalendarDay = selectObligationCalendarDay;
 
 // ---- TAB SWITCHING ----
-function switchTab(tabId) {
+function switchTab(tabId, preserveScroll = false) {
   activeTab = tabId;
   document.querySelectorAll('.nav-tab').forEach(tab => {
     tab.classList.toggle('active', tab.dataset.tab === tabId);
@@ -1845,7 +1885,19 @@ function switchTab(tabId) {
   if (targetView) {
     targetView.classList.remove('hidden');
     targetView.style.display = 'block';
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    if (preserveScroll && typeof viewScrollOffsets[tabId] === 'number') {
+      const targetScroll = viewScrollOffsets[tabId];
+      window.scrollTo({ top: targetScroll, behavior: 'auto' });
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: targetScroll, behavior: 'auto' });
+        setTimeout(() => {
+          window.scrollTo({ top: targetScroll, behavior: 'auto' });
+        }, 40);
+      });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   }
 
   if (tabId === 'cards') {
@@ -1965,7 +2017,19 @@ function init() {
 
   // Dedicated Detail View Back Button
   document.getElementById('detailBackBtn')?.addEventListener('click', () => {
-    switchTab(previousTab || 'dashboard');
+    if (window.location.hash === '#detail') {
+      window.history.back();
+    } else {
+      switchTab(previousTab || 'transactions', true);
+    }
+  });
+
+  // Handle browser back button (history popstate)
+  window.addEventListener('popstate', () => {
+    const detailView = document.getElementById('detailView');
+    if (detailView && !detailView.classList.contains('hidden') && detailView.style.display !== 'none') {
+      switchTab(previousTab || 'transactions', true);
+    }
   });
 
   // Global Transaction Row Click Delegation (Works everywhere instantly)
