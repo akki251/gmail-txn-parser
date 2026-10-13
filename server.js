@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const { execFile } = require('child_process');
 const db = require('./db');
 const { CATEGORIES } = require('./categorize');
-const { parseTransactionSms } = require('./smsParsers');
+const { parseTransactionSms, SMS_PARSERS } = require('./smsParsers');
 const { classifyMessage, Classification } = require('./nonTransactional');
 const { llmFallbackExtract, llmVerifyTransaction } = require('./llmFallback');
 const stats = require('./pipelineStats');
@@ -177,7 +177,12 @@ function safeIsoDate(dStr) {
 // forwarded, so retried/duplicate deliveries from the Shortcut are naturally
 // idempotent via db.js's existing dedupe-by-id check.
 async function handleSmsIngest(req, res) {
-  const body = await readBody(req);
+  let body;
+  try {
+    body = await readBody(req);
+  } catch (err) {
+    return sendJson(res, 400, { error: 'Invalid JSON payload: ' + err.message });
+  }
   const sender = body.sender || body.Sender || body.from || body.From || body.textSender || 'SMS';
   const text = body.text || body.Text || body.content || body.Content || body.body || body.Body || body.message || body.Message || '';
   const date = body.date || body.Date || body.time || body.Time || body.timestamp;
@@ -354,7 +359,7 @@ async function handleApi(req, res, urlPath) {
           crypto.timingSafeEqual(Buffer.from(given), Buffer.from(expected));
         if (!match) return sendJson(res, 401, { error: 'Invalid or missing secret' });
       }
-      return handleSmsIngest(req, res);
+      return await handleSmsIngest(req, res);
     }
 
     if (req.method === 'POST' && urlPath === '/api/login') {
@@ -500,7 +505,12 @@ async function handleApi(req, res, urlPath) {
 const server = http.createServer((req, res) => {
   const urlPath = req.url.split('?')[0];
   if (urlPath.startsWith('/api/')) {
-    handleApi(req, res, urlPath);
+    handleApi(req, res, urlPath).catch((err) => {
+      console.error('[Unhandled API error]:', err);
+      if (!res.headersSent) {
+        sendJson(res, 500, { error: err.message || 'Internal Server Error' });
+      }
+    });
   } else {
     serveStatic(req, res, urlPath);
   }

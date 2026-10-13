@@ -43,4 +43,11 @@ const invalidDateResult = safeIsoDate('15/08/2026, 02:00:00 IST');
 assert.ok(typeof invalidDateResult === 'string' && invalidDateResult.length > 0, 'Invalid date string should not crash, returns valid ISO string');
 console.log('✓ Invalid date string handled gracefully without crash:', invalidDateResult);
 
+// Test 4: SMS_PARSERS export and sender matching
+const { SMS_PARSERS } = require('./smsParsers');
+assert.ok(Array.isArray(SMS_PARSERS) && SMS_PARSERS.length > 0, 'SMS_PARSERS must be an array of parsers');
+const match = SMS_PARSERS.find((p) => p.matchSender('JM-ICICIB', 'ICICI Bank Acct debited'));
+assert.ok(match, 'SMS_PARSERS should match ICICI SMS');
+console.log('✓ SMS_PARSERS export and sender match verified');
+
 console.log('\nAll iOS Shortcut payload regression tests passed successfully!');
